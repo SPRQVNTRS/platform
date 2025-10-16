@@ -1,0 +1,20 @@
+{
+  "name": "@sprqvntrs/platform",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "clean": "rm -rf .pnpm-store node_modules .turbo",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "version:bump": "pnpm --filter \"./apps/*\" run version:bump",
+    "version:bump:all": "pnpm --filter \"./apps/*\" --parallel run version:bump"
+  },
+  "devDependencies": {
+    "eslint-plugin-tailwindcss": "^3.13.0",
+    "prettier": "^3.0.3",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "packageManager": "pnpm@10.18.1"
+}
