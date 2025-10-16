@@ -6,9 +6,13 @@
     "clean": "rm -rf .pnpm-store node_modules .turbo",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "version:bump": "pnpm --filter \"./apps/*\" run version:bump",
-    "version:bump:all": "pnpm --filter \"./apps/*\" --parallel run version:bump"
+    "version:bump:all": "pnpm --filter \"./apps/*\" --parallel run version:bump",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm publish -r --no-git-checks"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.7",
     "eslint-plugin-tailwindcss": "^3.13.0",
     "prettier": "^3.0.3",
     "typescript": "^5.9.3"

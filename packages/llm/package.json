@@ -8,8 +8,14 @@
     ".": "./index.ts"
   },
   "license": "proprietary",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SPRQVNTRS/platform.git",
+    "directory": "packages/llm"
+  },
   "files": [
-    "src/**/*"
+    "src/**/*",
+    "index.ts"
   ],
   "scripts": {},
   "dependencies": {
