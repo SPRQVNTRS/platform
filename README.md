@@ -6,148 +6,68 @@ Private monorepo for `@sprqvntrs` scoped packages published to GitHub Packages.
 
 - **[@sprqvntrs/llm](packages/llm)** - LLM integration utilities
 
-## 🚀 Publishing Packages
+## 🚀 Publishing
 
-### Using Claude Code Commands (Easiest)
+### Quick Start (Claude Code)
 
-**`/release [optional description]`**
-
-Creates a changeset by analyzing your changes. Does NOT immediately publish.
-
-- Analyzes git diff to determine affected packages
-- Creates a `.changeset/*.md` file with version bump info
-- Commits and pushes the changeset
-- Triggers "Version Packages" PR creation
-- When PR is merged → packages publish automatically
-
-**`/publish`**
-
-Consumes existing changesets and publishes immediately.
-
-- Requires changesets to already exist (from `/release`)
-- Runs `pnpm version-packages` (updates package.json, CHANGELOG)
-- Commits version changes
-- Pushes to trigger immediate publishing via GitHub Actions
-
-**Typical workflow:**
-1. Make changes → `/release "description"` → creates PR
-2. Review & merge PR → auto-publish
-
-**Direct publish:**
-1. Make changes → `/release` → `/publish` → immediate publish
-
-### Manual Release Workflow
-
-1. Create a changeset describing your changes:
-   ```bash
-   pnpm changeset
-   ```
-   - Select which packages changed
-   - Choose version bump type (patch/minor/major)
-   - Write a summary of changes
-
-2. Commit and push the changeset:
-   ```bash
-   git add .
-   git commit -m "feat: your feature description"
-   git push
-   ```
-
-3. The workflow will automatically:
-   - Create a "Version Packages" PR
-   - When merged, publish packages to GitHub Packages
-
-### Manual Release
-
-Use the GitHub Actions workflow dispatch:
-
-1. Go to **Actions** → **Publish Packages**
-2. Click **Run workflow**
-3. Select version type (patch/minor/major)
-4. Packages will be versioned and published immediately
-
-### Local Publishing (Development)
-
-```bash
-# Version packages based on changesets
-pnpm version-packages
-
-# Publish all packages
-pnpm release
+```
+/release "your changes"   # Create changeset → PR → merge → auto-publish
+/publish                   # Version & publish immediately
 ```
 
-**Note:** Ensure `NODE_AUTH_TOKEN` is set with a GitHub PAT that has `packages:write` permission.
+### Manual Workflow
 
-## 📦 Adding New Packages
+```bash
+pnpm changeset              # Create changeset
+git add . && git commit -m "feat: description" && git push
+# GitHub creates PR → merge to publish
+```
 
-1. Create package directory:
-   ```bash
-   mkdir -p packages/your-package
-   cd packages/your-package
-   ```
-
-2. Create `package.json`:
-   ```json
-   {
-     "name": "@sprqvntrs/your-package",
-     "version": "0.0.0",
-     "type": "module",
-     "main": "./index.ts",
-     "types": "./index.ts",
-     "exports": {
-       ".": "./index.ts"
-     },
-     "license": "proprietary",
-     "repository": {
-       "type": "git",
-       "url": "git+https://github.com/SPRQVNTRS/platform.git",
-       "directory": "packages/your-package"
-     },
-     "publishConfig": {
-       "registry": "https://npm.pkg.github.com"
-     }
-   }
-   ```
-
-3. Create your package files (`index.ts`, etc.)
-
-4. Install dependencies from workspace root:
-   ```bash
-   pnpm install
-   ```
+**Version types:** patch (0.0.X) | minor (0.X.0) | major (X.0.0)
 
 ## 📥 Consuming Packages
 
-### Setup Authentication
+### 1. Create Token
 
-Create or edit `.npmrc` in your project or home directory (`~/.npmrc`):
+[Create classic PAT](https://github.com/settings/tokens) with `read:packages` scope (fine-grained tokens not officially supported yet).
 
+### 2. Configure Authentication
+
+**Project `.npmrc` (recommended, safe to commit):**
 ```
 @sprqvntrs:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=YOUR_GITHUB_PERSONAL_ACCESS_TOKEN
+//npm.pkg.github.com/:_authToken=${GH_PACKAGES_TOKEN}
 ```
 
-**Create a GitHub Personal Access Token:**
-1. Go to GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
-2. Generate new token with `read:packages` scope
-3. Copy the token and add to `.npmrc`
+Then set in shell: `export GH_PACKAGES_TOKEN=ghp_xxx`
 
-### Install Packages
+**Or user `~/.npmrc` (not committed):**
+```
+@sprqvntrs:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=ghp_xxx
+```
+
+### 3. Install
 
 ```bash
-# Using pnpm
 pnpm add @sprqvntrs/llm
-
-# Using npm
-npm install @sprqvntrs/llm
-
-# Using yarn
-yarn add @sprqvntrs/llm
 ```
 
-### TypeScript Configuration
+### GitHub Actions
 
-Since packages are published as TypeScript source files, ensure your project can compile them:
+```yaml
+- uses: actions/setup-node@v4
+  with:
+    registry-url: 'https://npm.pkg.github.com'
+- run: npm install
+  env:
+    NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Same repo
+    # NODE_AUTH_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}  # Cross-repo
+```
+
+### TypeScript Config
+
+Packages are TypeScript source files. Configure your bundler to transpile `node_modules/@sprqvntrs/*`, or use:
 
 ```json
 {
@@ -158,27 +78,47 @@ Since packages are published as TypeScript source files, ensure your project can
 }
 ```
 
-Or configure your bundler (Vite, Next.js, etc.) to transpile `node_modules/@sprqvntrs/*`.
+## 📦 Adding Packages
+
+```bash
+mkdir -p packages/your-package
+```
+
+```json
+{
+  "name": "@sprqvntrs/your-package",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": { ".": "./index.ts" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SPRQVNTRS/platform.git",
+    "directory": "packages/your-package"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
+}
+```
+
+## 🔐 Security
+
+**Never commit:** PATs, `.npmrc` with hardcoded tokens, `.env` files with secrets
+
+**Safe to commit:** `.npmrc` with `${ENV_VARIABLE}` placeholders
+
+**Token scopes:**
+- Install: `read:packages`
+- Publish: `write:packages`, `repo`
+
+**If token leaked:** Revoke at https://github.com/settings/tokens, remove from git history, regenerate
 
 ## 🛠️ Development
 
 ```bash
-# Install dependencies
-pnpm install
-
-# Format code
-pnpm format
-
-# Clean workspace
-pnpm clean
+pnpm install    # Install dependencies
+pnpm format     # Format code
+pnpm clean      # Clean workspace
 ```
-
-## 📝 Changeset Workflow
-
-Changesets help manage versions and changelogs in a monorepo:
-
-- **patch**: Bug fixes, small changes (0.0.X)
-- **minor**: New features, backwards compatible (0.X.0)
-- **major**: Breaking changes (X.0.0)
-
-Each changeset becomes part of the changelog when versions are published.
