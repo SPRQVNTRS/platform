@@ -2,38 +2,45 @@
 allowed-tools: Bash(git *), Bash(pnpm *)
 argument-hint: [version type: patch|minor|major]
 description: Version and publish packages immediately (bypasses changeset PR flow)
+model: claude-haiku-4-5-20251001
 ---
 
 You are helping to publish packages directly to GitHub Packages. Follow these steps:
 
 1. **Check current status**:
+
    ```bash
    git status
    git diff
    ```
 
 2. **Verify there are changesets** to process:
+
    ```bash
    ls -la .changeset/*.md 2>/dev/null | grep -v README
    ```
 
 3. **Version the packages** based on changesets:
+
    ```bash
    pnpm version-packages
    ```
 
 4. **Review the version changes** that were made:
+
    ```bash
    git diff
    ```
 
 5. **Commit the version changes**:
+
    ```bash
    git add .
    git commit -m "chore: version packages"
    ```
 
 6. **Push to remote**:
+
    ```bash
    git push
    ```

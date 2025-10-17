@@ -2,6 +2,7 @@
 allowed-tools: Bash(git *), Bash(pnpm *)
 argument-hint: [changeset description (optional)]
 description: Create a changeset, commit, and push changes for release
+model: claude-haiku-4-5-20251001
 ---
 
 You are helping to create a release for this monorepo. Follow these steps:
@@ -16,21 +17,25 @@ You are helping to create a release for this monorepo. Follow these steps:
    - A clear, concise summary of the changes
 
 4. **Create a changeset** by running:
+
    ```bash
    pnpm changeset add
    ```
+
    When prompted:
    - Select the affected package(s)
    - Choose the appropriate version bump (patch/minor/major)
    - Provide a clear summary: $ARGUMENTS (or generate one based on the diff if no argument provided)
 
 5. **Stage and commit** the changeset:
+
    ```bash
    git add .changeset
    git commit -m "chore: add changeset for [describe the change]"
    ```
 
 6. **Push to trigger the release workflow**:
+
    ```bash
    git push
    ```
