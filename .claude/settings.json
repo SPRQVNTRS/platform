@@ -1,0 +1,10 @@
+{
+  "extraKnownMarketplaces": {
+    "team-tools": {
+      "source": {
+        "source": "github",
+        "repo": "SPRQVNTRS/agent-plugins"
+      }
+    }
+  }
+}
