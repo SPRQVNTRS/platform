@@ -1,5 +1,11 @@
 # @sprqvntrs/llm
 
+## 1.0.3
+
+### Patch Changes
+
+- 59d29ef: Upgrade @anthropic-ai/sdk to 0.67.0 and resolve to 1.22.11
+
 ## 1.0.2
 
 ### Patch Changes
