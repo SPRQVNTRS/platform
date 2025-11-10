@@ -42,7 +42,7 @@ export class OpenRouterClient implements LlmClientInterface {
     this.client = new OpenRouter({
       apiKey: config.apiKey,
     });
-    this.model = config.model || 'openai/gpt-5-mini';
+    this.model = config.model || 'google/gemini-2.5-flash-lite-preview-09-2025';
     this.logger = new DebugLogger('OpenRouterClient', { enabled: config.debug });
 
     // Initialize formatter client if OpenAI API key is provided
@@ -53,9 +53,7 @@ export class OpenRouterClient implements LlmClientInterface {
         debug: config.debug,
       });
     } else {
-      this.logger.log(
-        '⚠️  No OpenAI API key provided. Structured responses will attempt direct JSON generation.',
-      );
+      this.logger.log('⚠️  No OpenAI API key provided. Structured responses will attempt direct JSON generation.');
     }
 
     // Validate configuration on instantiation
@@ -83,6 +81,21 @@ export class OpenRouterClient implements LlmClientInterface {
     // Note: The OpenRouter SDK doesn't expose apiKey directly,
     // so we assume it's valid if the client was constructed
     return true;
+  }
+
+  /**
+   * Creates a raw response from OpenRouter's API without structured output
+   *
+   * @param prompt The prompt to send to the model
+   * @returns The raw chat completion response from OpenRouter
+   */
+  async createResponse(prompt: string): Promise<unknown> {
+    const response = await this.client.chat.send({
+      model: this.model,
+      messages: [{ role: 'user', content: prompt }],
+      stream: false,
+    });
+    return response;
   }
 
   /**

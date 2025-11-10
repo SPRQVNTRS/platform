@@ -36,8 +36,23 @@ async function testAnthropicClient() {
   });
   console.log('✓ Client initialized successfully\n');
 
-  // Test 1: Basic structured response
-  console.log('2. Testing basic structured response...');
+  // Test 1: Basic raw response
+  console.log('2. Testing basic raw response...');
+  try {
+    const rawResponse = await client.createResponse('What is the capital of France? Answer briefly.');
+
+    console.log('✓ Raw response received');
+    // Extract text content from Anthropic's response format
+    const textContent = rawResponse.content.find((block) => block.type === 'text');
+    console.log('  Message:', textContent?.text);
+    console.log();
+  } catch (error) {
+    console.error('✗ Test failed:', error);
+    throw error;
+  }
+
+  // Test 2: Basic structured response
+  console.log('3. Testing basic structured response...');
   const schema = z.object({
     answer: z.string(),
     reasoning: z.string(),
@@ -57,8 +72,8 @@ async function testAnthropicClient() {
     throw error;
   }
 
-  // Test 2: With reasoning effort (to test thinking mode)
-  console.log('3. Testing with reasoning effort (thinking mode)...');
+  // Test 3: With reasoning effort (to test thinking mode)
+  console.log('4. Testing with reasoning effort (thinking mode)...');
   try {
     const reasoningResult = await client.createStructuredResponse({
       prompt: 'List two benefits of TypeScript.',

@@ -55,6 +55,15 @@ export interface LlmClientInterface {
   validateConfiguration(): boolean;
 
   /**
+   * Creates a raw response from the provider's API without structured output
+   * Returns the raw completion object from the provider
+   *
+   * @param prompt The prompt to send to the model
+   * @returns The raw response from the provider
+   */
+  createResponse(prompt: string): Promise<unknown>;
+
+  /**
    * Creates a structured response using the provider's API with Zod schema validation
    * Includes built-in retry logic, execution time tracking, and error handling
    *

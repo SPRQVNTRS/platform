@@ -94,6 +94,26 @@ export class AnthropicClient implements LlmClientInterface {
   }
 
   /**
+   * Creates a raw response from Anthropic's API without structured output
+   *
+   * @param prompt The prompt to send to the model
+   * @returns The raw message response from Anthropic
+   */
+  async createResponse(prompt: string): Promise<Anthropic.Message> {
+    const response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: ANTHROPIC_MAX_TOKENS,
+      messages: [
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+    });
+    return response;
+  }
+
+  /**
    * Get the underlying Anthropic SDK client
    * This allows access to all native Anthropic SDK methods
    */

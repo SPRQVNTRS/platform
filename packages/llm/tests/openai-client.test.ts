@@ -29,8 +29,21 @@ async function testOpenAIClient() {
   });
   console.log('✓ Client initialized successfully\n');
 
-  // Test 1: Basic structured response
-  console.log('2. Testing basic structured response...');
+  // Test 1: Basic raw response
+  console.log('2. Testing basic raw response...');
+  try {
+    const rawResponse = await client.createResponse('What is 2+2? Answer briefly.');
+
+    console.log('✓ Raw response received');
+    console.log('  Message:', rawResponse.choices[0]?.message.content);
+    console.log();
+  } catch (error) {
+    console.error('✗ Test failed:', error);
+    throw error;
+  }
+
+  // Test 2: Basic structured response
+  console.log('3. Testing basic structured response...');
   const schema = z.object({
     answer: z.string(),
     confidence: z.number().min(0).max(1),
@@ -50,8 +63,8 @@ async function testOpenAIClient() {
     throw error;
   }
 
-  // Test 2: Structured output with nested objects
-  console.log('3. Testing structured output with nested objects...');
+  // Test 3: Structured output with nested objects
+  console.log('4. Testing structured output with nested objects...');
   try {
     const nestedResult = await client.createStructuredResponse({
       prompt: 'Create a simple user profile with name, age, and two skills.',

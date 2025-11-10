@@ -36,8 +36,23 @@ async function testOpenRouterClient() {
   });
   console.log('✓ Client initialized successfully\n');
 
-  // Test 1: Basic structured response
-  console.log('2. Testing basic structured response...');
+  // Test 1: Basic raw response
+  console.log('2. Testing basic raw response...');
+  try {
+    const rawResponse = (await client.createResponse('What is 5+7? Answer briefly.')) as {
+      choices: Array<{ message?: { content?: string } }>;
+    };
+
+    console.log('✓ Raw response received');
+    console.log('  Message:', rawResponse.choices[0]?.message?.content);
+    console.log();
+  } catch (error) {
+    console.error('✗ Test failed:', error);
+    throw error;
+  }
+
+  // Test 2: Basic structured response
+  console.log('3. Testing basic structured response...');
   const schema = z.object({
     answer: z.string(),
     confidence: z.number().min(0).max(1),
@@ -58,8 +73,8 @@ async function testOpenRouterClient() {
     throw error;
   }
 
-  // Test 2: Structured output with array
-  console.log('3. Testing structured output with array...');
+  // Test 3: Structured output with array
+  console.log('4. Testing structured output with array...');
   try {
     const arrayResult = await client.createStructuredResponse({
       prompt: 'List two programming languages.',
