@@ -1,0 +1,3 @@
+# Environment variables (contains API keys)
+tests/.env
+.env
