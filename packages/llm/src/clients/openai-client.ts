@@ -1,8 +1,16 @@
 import { OpenAI } from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import { z } from 'zod/v3';
-import type { LlmClientInterface } from '../types/client-interface';
+import type { LlmClientInterface, BaseLlmClientConfig } from '../types/client-interface';
 import { DEFAULT_MODELS, WEB_SEARCH_TOOLS } from '../models';
+import { DebugLogger } from '../utils/debug';
+
+export interface OpenAIClientConfig extends Omit<BaseLlmClientConfig, 'model'> {
+  /**
+   * The model to use (default: DEFAULT_MODELS.OPENAI_DEFAULT.model)
+   */
+  model?: OpenAI.AllModels;
+}
 
 /**
  * Client for interacting with OpenAI's API with enhanced functionality
@@ -12,24 +20,22 @@ import { DEFAULT_MODELS, WEB_SEARCH_TOOLS } from '../models';
 export class OpenAIClient implements LlmClientInterface {
   private openai: OpenAI;
   private model: string;
-  private debug: boolean;
+  private logger: DebugLogger;
 
   /**
    * Creates a new OpenAIClient instance
    *
-   * @param openApiKey Your OpenAI API key
-   * @param model The model to use (default: DEFAULT_MODELS.OPENAI_DEFAULT.model)
-   * @param debug Whether to log debug information (default: false)
+   * @param config Configuration options
    * @throws Error if the API key is not configured
    */
-  constructor(openApiKey: string, model?: OpenAI.AllModels, debug?: boolean) {
+  constructor(config: OpenAIClientConfig) {
     this.openai = new OpenAI({
-      apiKey: openApiKey,
+      apiKey: config.apiKey,
       timeout: 240000, // 240 seconds (4 minutes) timeout for all requests
       maxRetries: 2, // Retry failed requests up to 2 times
     });
-    this.model = model || DEFAULT_MODELS.OPENAI_DEFAULT.model;
-    this.debug = debug || false;
+    this.model = config.model || DEFAULT_MODELS.OPENAI_DEFAULT.model;
+    this.logger = new DebugLogger('OpenAIClient', { enabled: config.debug });
 
     // Validate configuration on instantiation
     this.validateConfiguration();
@@ -144,17 +150,15 @@ export class OpenAIClient implements LlmClientInterface {
       attempts++;
 
       try {
-        const startTime = logExecutionTime ? Date.now() : 0;
+        const startTime = Date.now();
 
-        if (this.debug || process.env.NODE_ENV === 'development') {
-          console.log('[OpenAIClient] createStructuredResponse called with:', {
-            modelUsed: this.model,
-            schemaType: typeof schema,
-            schemaConstructor: schema?.constructor?.name,
-            reasoningEffort,
-            attempt: `${attempts}/${maxAttempts}`,
-          });
-        }
+        this.logger.log('createStructuredResponse called', {
+          modelUsed: this.model,
+          schemaType: typeof schema,
+          schemaConstructor: schema?.constructor?.name,
+          reasoningEffort,
+          attempt: `${attempts}/${maxAttempts}`,
+        });
 
         // Create text format using zodTextFormat
         const textFormat = zodTextFormat(schema, 'structuredResponse');
@@ -181,9 +185,7 @@ export class OpenAIClient implements LlmClientInterface {
           ...(tools && { tools }), // Only include tools if web search is enabled
         });
 
-        if (this.debug) {
-          console.log('[OpenAIClient] Response usage:', response.usage);
-        }
+        this.logger.logUsage(response.usage || {});
 
         // Get the parsed output
         const parsedOutput = response.output_parsed;
@@ -195,31 +197,26 @@ export class OpenAIClient implements LlmClientInterface {
         // Validate with the schema (for extra safety)
         const validatedContent = schema.parse(parsedOutput);
 
-        // Log execution time if it's too long
-        if (logExecutionTime) {
+        // Log execution time
+        if (logExecutionTime || this.logger.isEnabled()) {
           const executionTime = Date.now() - startTime;
-          if (executionTime > 20000) {
-            console.log(`Long execution time for LLM completion: ${executionTime}ms`);
-          }
+          this.logger.logExecutionTime('createStructuredResponse', executionTime);
         }
 
         return validatedContent;
       } catch (error) {
         lastError = error;
 
-        if (this.debug) {
-          console.log(`Failed attempt ${attempts}/${maxAttempts}, retrying...`);
-          console.log(error);
-        }
+        this.logger.log(`Failed attempt ${attempts}/${maxAttempts}`, {
+          error: error instanceof Error ? error.message : String(error),
+        });
 
         if (attempts === maxAttempts) {
-          if (this.debug || process.env.NODE_ENV === 'development') {
-            console.error('[OpenAIClient] createStructuredResponse error:', {
-              error: error instanceof Error ? error.message : String(error),
-              errorName: error instanceof Error ? error.constructor.name : typeof error,
-              errorStack: error instanceof Error ? error.stack : undefined,
-            });
-          }
+          this.logger.log('createStructuredResponse error', {
+            error: error instanceof Error ? error.message : String(error),
+            errorName: error instanceof Error ? error.constructor.name : typeof error,
+            errorStack: error instanceof Error ? error.stack : undefined,
+          });
 
           if (error instanceof Error) {
             throw error;
@@ -235,17 +232,16 @@ export class OpenAIClient implements LlmClientInterface {
 
   /**
    * Process a batch of items with an LLM using parallel processing
-   *
-   * @param items The items to process
-   * @param processFn The function to process each batch
-   * @param batchSize The size of each batch (default: 5)
-   * @returns The processed results
    */
-  async processBatchWithLLM<T, R>(
-    items: T[],
-    processFn: (batch: T[]) => Promise<R[]>,
-    batchSize: number = 5,
-  ): Promise<R[]> {
+  async processBatchWithLLM<T, R>({
+    items,
+    processFn,
+    batchSize = 5,
+  }: {
+    items: T[];
+    processFn: (batch: T[]) => Promise<R[]>;
+    batchSize?: number;
+  }): Promise<R[]> {
     // Split items into batches
     const batches: T[][] = [];
     for (let i = 0; i < items.length; i += batchSize) {
