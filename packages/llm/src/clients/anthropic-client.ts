@@ -1,9 +1,22 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod/v3';
-import type { LlmClientInterface } from '../types/client-interface';
+import type { LlmClientInterface, BaseLlmClientConfig } from '../types/client-interface';
 import { DEFAULT_MODELS, ANTHROPIC_MAX_TOKENS, WEB_SEARCH_TOOLS } from '../models';
 import { OpenAIClient } from './openai-client';
 import { AnthropicModel } from '../model-types';
+import { DebugLogger } from '../utils/debug';
+
+export interface AnthropicClientConfig extends Omit<BaseLlmClientConfig, 'model'> {
+  /**
+   * The Anthropic model to use
+   */
+  model: AnthropicModel;
+
+  /**
+   * Optional OpenAI API key for structured formatting (auto-detected from env if not provided)
+   */
+  openaiApiKey?: string;
+}
 
 /**
  * Client for interacting with Anthropic's API.
@@ -14,29 +27,33 @@ export class AnthropicClient implements LlmClientInterface {
   private client: Anthropic;
   private model: AnthropicModel;
   private formatterClient?: OpenAIClient;
+  private logger: DebugLogger;
 
   /**
    * Creates a new AnthropicClient instance
    *
-   * @param apiKey Your Anthropic API key
-   * @param model The model to use
-   * @param openaiApiKey Optional OpenAI API key for structured formatting (auto-detected from env if not provided)
+   * @param config Configuration options
    * @throws Error if the Anthropic API key is not configured
    */
-  constructor(apiKey: string, model: AnthropicModel, openaiApiKey?: string) {
+  constructor(config: AnthropicClientConfig) {
     this.client = new Anthropic({
-      apiKey,
+      apiKey: config.apiKey,
       timeout: 240000, // 240 seconds (4 minutes) timeout for all requests
       maxRetries: 2, // Retry failed requests up to 2 times
     });
-    this.model = model;
+    this.model = config.model;
+    this.logger = new DebugLogger('AnthropicClient', { enabled: config.debug });
 
     // Auto-detect OpenAI API key from environment if not explicitly provided
-    const openaiKey = openaiApiKey || process.env.OPENAI_API_KEY;
+    const openaiKey = config.openaiApiKey || process.env.OPENAI_API_KEY;
 
     // Initialize OpenAI formatter if API key is available
     if (openaiKey) {
-      this.formatterClient = new OpenAIClient(openaiKey, DEFAULT_MODELS.STRUCTURED_FORMATTER.model);
+      this.formatterClient = new OpenAIClient({
+        apiKey: openaiKey,
+        model: DEFAULT_MODELS.STRUCTURED_FORMATTER.model,
+        debug: config.debug,
+      });
     }
 
     // Validate configuration on instantiation
@@ -48,8 +65,12 @@ export class AnthropicClient implements LlmClientInterface {
    *
    * @param openaiApiKey OpenAI API key
    */
-  setFormatterClient(openaiApiKey: string): void {
-    this.formatterClient = new OpenAIClient(openaiApiKey, DEFAULT_MODELS.STRUCTURED_FORMATTER.model);
+  setFormatterClient(openaiApiKey: string, debug?: boolean): void {
+    this.formatterClient = new OpenAIClient({
+      apiKey: openaiApiKey,
+      model: DEFAULT_MODELS.STRUCTURED_FORMATTER.model,
+      debug,
+    });
   }
 
   /**
@@ -63,8 +84,8 @@ export class AnthropicClient implements LlmClientInterface {
 
     // Warn if OpenAI formatter is not available (but don't throw - fallback exists)
     if (!this.formatterClient) {
-      console.warn(
-        'OpenAI API key not found. Anthropic will attempt direct JSON generation (less reliable). ' +
+      this.logger.log(
+        '⚠️  OpenAI API key not found. Anthropic will attempt direct JSON generation (less reliable). ' +
           'Set OPENAI_API_KEY environment variable for better structured output.',
       );
     }
@@ -203,18 +224,13 @@ export class AnthropicClient implements LlmClientInterface {
     const textContent = anthropicResponse.content.find((block) => block.type === 'text');
     if (!textContent || textContent.type !== 'text') {
       // Log the actual response structure for debugging
-      console.error('[AnthropicClient] Unexpected response structure:', {
+      this.logger.log('❌ Unexpected response structure', {
         contentBlocks: anthropicResponse.content.map((block) => ({ type: block.type })),
       });
       throw new Error('Expected text response from Anthropic');
     }
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[AnthropicClient] Anthropic generated content:', {
-        responseLength: textContent.text.length,
-        responsePreview: textContent.text.substring(0, 500),
-      });
-    }
+    this.logger.logResponsePreview(textContent.text);
 
     // Step 2: Use OpenAI to format the response into the required schema
     const formattedResponse = await this.formatterClient.createStructuredResponse({
@@ -226,12 +242,10 @@ export class AnthropicClient implements LlmClientInterface {
       logExecutionTime: false, // We'll log our own execution time
     });
 
-    // Log execution time if it's too long
-    if (logExecutionTime) {
+    // Log execution time
+    if (logExecutionTime || this.logger.isEnabled()) {
       const executionTime = Date.now() - startTime;
-      if (executionTime > 20000) {
-        console.log(`Long execution time for LLM completion: ${executionTime}ms`);
-      }
+      this.logger.logExecutionTime('createStructuredResponse', executionTime);
     }
 
     return formattedResponse;
@@ -240,11 +254,15 @@ export class AnthropicClient implements LlmClientInterface {
   /**
    * Process a batch of items with parallel processing
    */
-  async processBatchWithLLM<T, R>(
-    items: T[],
-    processFn: (batch: T[]) => Promise<R[]>,
-    batchSize: number = 5,
-  ): Promise<R[]> {
+  async processBatchWithLLM<T, R>({
+    items,
+    processFn,
+    batchSize = 5,
+  }: {
+    items: T[];
+    processFn: (batch: T[]) => Promise<R[]>;
+    batchSize?: number;
+  }): Promise<R[]> {
     const batches: T[][] = [];
     for (let i = 0; i < items.length; i += batchSize) {
       batches.push(items.slice(i, i + batchSize));
