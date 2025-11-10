@@ -1,14 +1,19 @@
 import invariant from 'tiny-invariant';
 import { OpenAIClient } from './clients/openai-client';
 import { AnthropicClient } from './clients/anthropic-client';
+import { OpenRouterClient } from './clients/openrouter-client';
 import type { LlmClientInterface } from './types/client-interface';
+import type { AnthropicModel } from './model-types';
 
-export type LlmProvider = 'openai' | 'anthropic';
+export type LlmProvider = 'openai' | 'anthropic' | 'openrouter';
 
 export type LlmClientOptions = {
   apiKey?: string;
   /**
    * Enable debug mode for development.
+   * - If true: always log debug messages
+   * - If false: never log debug messages
+   * - If undefined: auto-detect based on NODE_ENV (enabled in development)
    */
   debug?: boolean;
   /**
@@ -16,8 +21,8 @@ export type LlmClientOptions = {
    */
   useReasoningMode?: boolean;
   /**
-   * OpenAI API key for structured formatting (used by Anthropic client).
-   * If provided, Anthropic will use OpenAI for reliable structured output formatting.
+   * OpenAI API key for structured formatting (used by Anthropic and OpenRouter clients).
+   * If provided, these clients will use OpenAI for reliable structured output formatting.
    */
   openaiApiKey?: string;
 };
@@ -30,14 +35,15 @@ export type LlmClientOptions = {
 export class LLM {
   /**
    * Get an LLM client that implements the unified interface.
-   * Works with both OpenAI and Anthropic providers transparently.
+   * Works with OpenAI, Anthropic, and OpenRouter providers transparently.
    *
-   * @param provider - The LLM provider ('openai' or 'anthropic')
-   * @param model - The model identifier (e.g., 'gpt-4o', 'claude-sonnet-4-20250514')
+   * @param provider - The LLM provider ('openai', 'anthropic', or 'openrouter')
+   * @param model - The model identifier (e.g., 'gpt-4o', 'claude-sonnet-4-20250514', 'openai/gpt-4o-mini')
    * @param options - Optional configuration overrides
    * @returns Client implementing LlmClientInterface
    * @example
    * const llm = LLM.getClient('openai', 'gpt-4o');
+   * const llm2 = LLM.getClient('openrouter', 'openai/gpt-4o-mini');
    * const result = await llm.createStructuredResponse({ prompt, schema });
    */
   static getClient(provider: LlmProvider, model: string, options?: LlmClientOptions): LlmClientInterface {
@@ -46,6 +52,8 @@ export class LLM {
         return this._createOpenAIClient(model, options);
       case 'anthropic':
         return this._createAnthropicClient(model, options);
+      case 'openrouter':
+        return this._createOpenRouterClient(model, options);
     }
   }
 
@@ -55,7 +63,11 @@ export class LLM {
   private static _createOpenAIClient(model: string, options?: LlmClientOptions): OpenAIClient {
     const apiKey = options?.apiKey ?? process.env.OPENAI_API_KEY;
     invariant(apiKey, 'OPENAI_API_KEY is not set');
-    return new OpenAIClient(apiKey, model, options?.debug);
+    return new OpenAIClient({
+      apiKey,
+      model,
+      debug: options?.debug,
+    });
   }
 
   /**
@@ -65,10 +77,26 @@ export class LLM {
     const apiKey = options?.apiKey ?? process.env.ANTHROPIC_API_KEY;
     invariant(apiKey, 'ANTHROPIC_API_KEY is not set');
 
-    // OpenAI API key is auto-detected from environment in AnthropicClient constructor
-    // Can be overridden via options if needed
-    const openaiApiKey = options?.openaiApiKey;
+    return new AnthropicClient({
+      apiKey,
+      model: model as AnthropicModel,
+      openaiApiKey: options?.openaiApiKey,
+      debug: options?.debug,
+    });
+  }
 
-    return new AnthropicClient(apiKey, model, openaiApiKey);
+  /**
+   * Create an OpenRouter client instance
+   */
+  private static _createOpenRouterClient(model: string, options?: LlmClientOptions): OpenRouterClient {
+    const apiKey = options?.apiKey ?? process.env.OPENROUTER_API_KEY;
+    invariant(apiKey, 'OPENROUTER_API_KEY is not set');
+
+    return new OpenRouterClient({
+      apiKey,
+      model,
+      openaiApiKey: options?.openaiApiKey,
+      debug: options?.debug,
+    });
   }
 }
