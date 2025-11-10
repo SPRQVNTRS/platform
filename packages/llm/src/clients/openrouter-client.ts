@@ -1,8 +1,22 @@
 import { OpenRouter } from '@openrouter/sdk';
 import { z } from 'zod/v3';
-import type { LlmClientInterface } from '../types/client-interface';
+import type { LlmClientInterface, BaseLlmClientConfig } from '../types/client-interface';
 import { DEFAULT_MODELS } from '../models';
 import { OpenAIClient } from './openai-client';
+import { DebugLogger } from '../utils/debug';
+
+export interface OpenRouterClientConfig extends Omit<BaseLlmClientConfig, 'model'> {
+  /**
+   * The model to use (e.g., 'openai/gpt-4', 'anthropic/claude-3-opus')
+   * Defaults to 'openai/gpt-5-mini' if not specified
+   */
+  model?: string;
+
+  /**
+   * Optional OpenAI API key for structured output formatting
+   */
+  openaiApiKey?: string;
+}
 
 /**
  * Client for interacting with OpenRouter's API with enhanced functionality
@@ -15,32 +29,32 @@ import { OpenAIClient } from './openai-client';
 export class OpenRouterClient implements LlmClientInterface {
   private client: OpenRouter;
   private model: string;
-  private debug: boolean;
+  private logger: DebugLogger;
   private formatterClient?: OpenAIClient;
 
   /**
    * Creates a new OpenRouterClient instance
    *
-   * @param apiKey Your OpenRouter API key
-   * @param model The model to use (e.g., 'openai/gpt-4', 'anthropic/claude-3-opus')
-   * @param debug Whether to log debug information (default: false)
-   * @param openaiApiKey Optional OpenAI API key for structured output formatting
+   * @param config Configuration options
    * @throws Error if the API key is not configured
    */
-  constructor(apiKey: string, model?: string, debug?: boolean, openaiApiKey?: string) {
+  constructor(config: OpenRouterClientConfig) {
     this.client = new OpenRouter({
-      apiKey,
-      ...(debug && { debugLogger: console }),
+      apiKey: config.apiKey,
     });
-    this.model = model || 'openai/gpt-5-mini';
-    this.debug = debug || false;
+    this.model = config.model || 'openai/gpt-5-mini';
+    this.logger = new DebugLogger('OpenRouterClient', { enabled: config.debug });
 
     // Initialize formatter client if OpenAI API key is provided
-    if (openaiApiKey) {
-      this.formatterClient = new OpenAIClient(openaiApiKey, DEFAULT_MODELS.STRUCTURED_FORMATTER.model, debug);
-    } else if (this.debug || process.env.NODE_ENV === 'development') {
-      console.warn(
-        '[OpenRouterClient] No OpenAI API key provided. Structured responses will attempt direct JSON generation.',
+    if (config.openaiApiKey) {
+      this.formatterClient = new OpenAIClient({
+        apiKey: config.openaiApiKey,
+        model: DEFAULT_MODELS.STRUCTURED_FORMATTER.model,
+        debug: config.debug,
+      });
+    } else {
+      this.logger.log(
+        '⚠️  No OpenAI API key provided. Structured responses will attempt direct JSON generation.',
       );
     }
 
@@ -53,8 +67,12 @@ export class OpenRouterClient implements LlmClientInterface {
    *
    * @param openaiApiKey The OpenAI API key to use for formatting
    */
-  setFormatterClient(openaiApiKey: string): void {
-    this.formatterClient = new OpenAIClient(openaiApiKey, DEFAULT_MODELS.STRUCTURED_FORMATTER.model, this.debug);
+  setFormatterClient(openaiApiKey: string, debug?: boolean): void {
+    this.formatterClient = new OpenAIClient({
+      apiKey: openaiApiKey,
+      model: DEFAULT_MODELS.STRUCTURED_FORMATTER.model,
+      debug,
+    });
   }
 
   /**
@@ -116,18 +134,16 @@ export class OpenRouterClient implements LlmClientInterface {
       attempts++;
 
       try {
-        const startTime = logExecutionTime ? Date.now() : 0;
+        const startTime = Date.now();
 
-        if (this.debug || process.env.NODE_ENV === 'development') {
-          console.log('[OpenRouterClient] createStructuredResponse called with:', {
-            modelUsed: this.model,
-            schemaType: typeof schema,
-            schemaConstructor: schema?.constructor?.name,
-            reasoningEffort,
-            attempt: `${attempts}/${maxAttempts}`,
-            hasFormatter: !!this.formatterClient,
-          });
-        }
+        this.logger.log('createStructuredResponse called', {
+          modelUsed: this.model,
+          schemaType: typeof schema,
+          schemaConstructor: schema?.constructor?.name,
+          reasoningEffort,
+          attempt: `${attempts}/${maxAttempts}`,
+          hasFormatter: !!this.formatterClient,
+        });
 
         // Build the system message
         const systemMessage =
@@ -148,9 +164,7 @@ export class OpenRouterClient implements LlmClientInterface {
           stream: false,
         });
 
-        if (this.debug) {
-          console.log('[OpenRouterClient] Response usage:', response.usage);
-        }
+        this.logger.logUsage(response.usage || {});
 
         // Extract the content
         const content = response.choices[0]?.message?.content;
@@ -166,9 +180,7 @@ export class OpenRouterClient implements LlmClientInterface {
 
         if (this.formatterClient) {
           // Use OpenAI formatter for structured output
-          if (this.debug) {
-            console.log('[OpenRouterClient] Using OpenAI formatter for structured output');
-          }
+          this.logger.log('Using OpenAI formatter for structured output');
 
           validatedContent = await this.formatterClient.createStructuredResponse({
             prompt: `Format the following content according to the schema:\n\n${contentString}`,
@@ -178,9 +190,7 @@ export class OpenRouterClient implements LlmClientInterface {
           });
         } else {
           // Try to parse directly as JSON
-          if (this.debug) {
-            console.log('[OpenRouterClient] Attempting direct JSON parsing');
-          }
+          this.logger.log('Attempting direct JSON parsing');
 
           // Try to extract JSON from the response
           const jsonMatch = contentString.match(/```json\s*([\s\S]*?)\s*```/) || contentString.match(/\{[\s\S]*\}/);
@@ -190,31 +200,26 @@ export class OpenRouterClient implements LlmClientInterface {
           validatedContent = schema.parse(parsed);
         }
 
-        // Log execution time if it's too long
-        if (logExecutionTime) {
+        // Log execution time
+        if (logExecutionTime || this.logger.isEnabled()) {
           const executionTime = Date.now() - startTime;
-          if (executionTime > 20000) {
-            console.log(`Long execution time for LLM completion: ${executionTime}ms`);
-          }
+          this.logger.logExecutionTime('createStructuredResponse', executionTime);
         }
 
         return validatedContent;
       } catch (error) {
         lastError = error;
 
-        if (this.debug) {
-          console.log(`Failed attempt ${attempts}/${maxAttempts}, retrying...`);
-          console.log(error);
-        }
+        this.logger.log(`Failed attempt ${attempts}/${maxAttempts}`, {
+          error: error instanceof Error ? error.message : String(error),
+        });
 
         if (attempts === maxAttempts) {
-          if (this.debug || process.env.NODE_ENV === 'development') {
-            console.error('[OpenRouterClient] createStructuredResponse error:', {
-              error: error instanceof Error ? error.message : String(error),
-              errorName: error instanceof Error ? error.constructor.name : typeof error,
-              errorStack: error instanceof Error ? error.stack : undefined,
-            });
-          }
+          this.logger.log('createStructuredResponse error', {
+            error: error instanceof Error ? error.message : String(error),
+            errorName: error instanceof Error ? error.constructor.name : typeof error,
+            errorStack: error instanceof Error ? error.stack : undefined,
+          });
 
           if (error instanceof Error) {
             throw error;
@@ -251,17 +256,16 @@ export class OpenRouterClient implements LlmClientInterface {
 
   /**
    * Process a batch of items with an LLM using parallel processing
-   *
-   * @param items The items to process
-   * @param processFn The function to process each batch
-   * @param batchSize The size of each batch (default: 5)
-   * @returns The processed results
    */
-  async processBatchWithLLM<T, R>(
-    items: T[],
-    processFn: (batch: T[]) => Promise<R[]>,
-    batchSize: number = 5,
-  ): Promise<R[]> {
+  async processBatchWithLLM<T, R>({
+    items,
+    processFn,
+    batchSize = 5,
+  }: {
+    items: T[];
+    processFn: (batch: T[]) => Promise<R[]>;
+    batchSize?: number;
+  }): Promise<R[]> {
     // Split items into batches
     const batches: T[][] = [];
     for (let i = 0; i < items.length; i += batchSize) {
