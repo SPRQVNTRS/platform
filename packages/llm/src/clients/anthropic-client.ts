@@ -3,6 +3,7 @@ import { z } from 'zod/v3';
 import type { LlmClientInterface } from '../types/client-interface';
 import { DEFAULT_MODELS, ANTHROPIC_MAX_TOKENS, WEB_SEARCH_TOOLS } from '../models';
 import { OpenAIClient } from './openai-client';
+import { AnthropicModel } from '../model-types';
 
 /**
  * Client for interacting with Anthropic's API.
@@ -11,7 +12,7 @@ import { OpenAIClient } from './openai-client';
  */
 export class AnthropicClient implements LlmClientInterface {
   private client: Anthropic;
-  private model: string;
+  private model: AnthropicModel;
   private formatterClient?: OpenAIClient;
 
   /**
@@ -22,7 +23,7 @@ export class AnthropicClient implements LlmClientInterface {
    * @param openaiApiKey Optional OpenAI API key for structured formatting (auto-detected from env if not provided)
    * @throws Error if the Anthropic API key is not configured
    */
-  constructor(apiKey: string, model: string, openaiApiKey?: string) {
+  constructor(apiKey: string, model: AnthropicModel, openaiApiKey?: string) {
     this.client = new Anthropic({
       apiKey,
       timeout: 240000, // 240 seconds (4 minutes) timeout for all requests
@@ -35,10 +36,7 @@ export class AnthropicClient implements LlmClientInterface {
 
     // Initialize OpenAI formatter if API key is available
     if (openaiKey) {
-      this.formatterClient = new OpenAIClient(
-        openaiKey,
-        DEFAULT_MODELS.STRUCTURED_FORMATTER.model
-      );
+      this.formatterClient = new OpenAIClient(openaiKey, DEFAULT_MODELS.STRUCTURED_FORMATTER.model);
     }
 
     // Validate configuration on instantiation
@@ -51,10 +49,7 @@ export class AnthropicClient implements LlmClientInterface {
    * @param openaiApiKey OpenAI API key
    */
   setFormatterClient(openaiApiKey: string): void {
-    this.formatterClient = new OpenAIClient(
-      openaiApiKey,
-      DEFAULT_MODELS.STRUCTURED_FORMATTER.model
-    );
+    this.formatterClient = new OpenAIClient(openaiApiKey, DEFAULT_MODELS.STRUCTURED_FORMATTER.model);
   }
 
   /**
@@ -70,7 +65,7 @@ export class AnthropicClient implements LlmClientInterface {
     if (!this.formatterClient) {
       console.warn(
         'OpenAI API key not found. Anthropic will attempt direct JSON generation (less reliable). ' +
-        'Set OPENAI_API_KEY environment variable for better structured output.'
+          'Set OPENAI_API_KEY environment variable for better structured output.',
       );
     }
 
@@ -93,17 +88,49 @@ export class AnthropicClient implements LlmClientInterface {
   }
 
   /**
+   * Transforms reasoning effort level into Anthropic's thinking mode configuration
+   *
+   * @param reasoningEffort The normalized reasoning effort level
+   * @returns Thinking mode object with appropriate budget_tokens, or undefined if not needed
+   *
+   * Budget guidelines based on Anthropic's documentation:
+   * - low: 1,024 tokens (minimum threshold for basic reasoning)
+   * - medium: 8,192 tokens (moderate complexity tasks)
+   * - high: 16,384 tokens (complex tasks requiring comprehensive reasoning)
+   *
+   * @see https://docs.claude.com/en/docs/build-with-claude/extended-thinking
+   */
+  private getThinkingConfig(
+    reasoningEffort?: 'low' | 'medium' | 'high',
+  ): { type: 'enabled'; budget_tokens: number } | undefined {
+    if (!reasoningEffort) {
+      return undefined;
+    }
+
+    const budgetMap = {
+      low: 1024, // Minimum budget for basic reasoning
+      medium: 8192, // Moderate complexity tasks
+      high: 16384, // Complex tasks with comprehensive reasoning
+    };
+
+    return {
+      type: 'enabled',
+      budget_tokens: budgetMap[reasoningEffort],
+    };
+  }
+
+  /**
    * Creates a structured response using Anthropic for generation and OpenAI for formatting
    *
    * Since Anthropic doesn't support structured outputs, this method:
-   * 1. Generates content with Anthropic
+   * 1. Generates content with Anthropic (with optional extended thinking)
    * 2. Passes it to OpenAI's createStructuredResponse for formatting and validation
    *
    * @param options Configuration options
    * @param options.prompt The prompt to send to the model
    * @param options.schema The Zod schema to validate the response against
    * @param options.formatGuidance Optional guidance for formatting the response
-   * @param options.reasoningEffort Normalized reasoning effort level ('low' | 'medium' | 'high') - ignored by Anthropic
+   * @param options.reasoningEffort Normalized reasoning effort level ('low' | 'medium' | 'high') - enables extended thinking mode
    * @param options.maxAttempts Maximum number of retry attempts (default: 1, no retries)
    * @param options.logExecutionTime Whether to log execution time warnings (default: false)
    * @param options.responseInstructions Additional instructions to append to the prompt (deprecated, use formatGuidance)
@@ -115,6 +142,7 @@ export class AnthropicClient implements LlmClientInterface {
     prompt,
     schema,
     formatGuidance,
+    reasoningEffort,
     maxAttempts = 1,
     logExecutionTime = false,
     responseInstructions,
@@ -132,14 +160,15 @@ export class AnthropicClient implements LlmClientInterface {
     if (!this.formatterClient) {
       throw new Error(
         'OpenAI formatter not configured. Anthropic does not support structured outputs natively. ' +
-        'Please provide an OpenAI API key when creating the AnthropicClient, or set OPENAI_API_KEY environment variable.'
+          'Please provide an OpenAI API key when creating the AnthropicClient, or set OPENAI_API_KEY environment variable.',
       );
     }
 
     // Handle deprecated responseInstructions parameter
     const effectiveFormatGuidance =
       responseInstructions ?
-        (formatGuidance ? `${formatGuidance}\n\n${responseInstructions}` : responseInstructions)
+        formatGuidance ? `${formatGuidance}\n\n${responseInstructions}`
+        : responseInstructions
       : formatGuidance;
 
     const startTime = logExecutionTime ? Date.now() : 0;
@@ -147,34 +176,49 @@ export class AnthropicClient implements LlmClientInterface {
     // Build tools array if web search is enabled
     const tools = useWebSearch ? [WEB_SEARCH_TOOLS.ANTHROPIC] : undefined;
 
+    // Get thinking configuration based on reasoning effort
+    const thinking = this.getThinkingConfig(reasoningEffort);
+
+    // Calculate max_tokens: must be greater than thinking budget
+    // If thinking is enabled, we need max_tokens > budget_tokens
+    // Otherwise, use the default ANTHROPIC_MAX_TOKENS
+    const maxTokens = thinking ? Math.max(ANTHROPIC_MAX_TOKENS, thinking.budget_tokens + 4096) : ANTHROPIC_MAX_TOKENS;
+
     // Step 1: Generate content with Anthropic
     const anthropicResponse = await this.client.messages.create({
       model: this.model,
-      max_tokens: ANTHROPIC_MAX_TOKENS,
+      max_tokens: maxTokens,
       messages: [
         {
           role: 'user',
-          content: prompt
-        }
+          content: prompt,
+        },
       ],
       ...(tools && { tools }), // Only include tools if web search is enabled
+      ...(thinking && { thinking }), // Only include thinking if reasoning effort is specified
     });
 
-    const content = anthropicResponse.content[0];
-    if (!content || content.type !== 'text') {
+    // Extract text content - when thinking mode is enabled, response may have multiple content blocks
+    // Find the text block (skip thinking blocks)
+    const textContent = anthropicResponse.content.find((block) => block.type === 'text');
+    if (!textContent || textContent.type !== 'text') {
+      // Log the actual response structure for debugging
+      console.error('[AnthropicClient] Unexpected response structure:', {
+        contentBlocks: anthropicResponse.content.map((block) => ({ type: block.type })),
+      });
       throw new Error('Expected text response from Anthropic');
     }
 
     if (process.env.NODE_ENV === 'development') {
       console.log('[AnthropicClient] Anthropic generated content:', {
-        responseLength: content.text.length,
-        responsePreview: content.text.substring(0, 500),
+        responseLength: textContent.text.length,
+        responsePreview: textContent.text.substring(0, 500),
       });
     }
 
     // Step 2: Use OpenAI to format the response into the required schema
     const formattedResponse = await this.formatterClient.createStructuredResponse({
-      prompt: content.text,
+      prompt: textContent.text,
       schema,
       formatGuidance: effectiveFormatGuidance,
       reasoningEffort: 'low', // Formatting doesn't need high reasoning
@@ -199,7 +243,7 @@ export class AnthropicClient implements LlmClientInterface {
   async processBatchWithLLM<T, R>(
     items: T[],
     processFn: (batch: T[]) => Promise<R[]>,
-    batchSize: number = 5
+    batchSize: number = 5,
   ): Promise<R[]> {
     const batches: T[][] = [];
     for (let i = 0; i < items.length; i += batchSize) {

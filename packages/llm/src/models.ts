@@ -52,8 +52,9 @@ export const REASONING_EFFORT_MAP = {
 } as const;
 
 /**
- * Default max tokens for Anthropic responses
- * This is a fixed value as Anthropic doesn't support reasoning effort
+ * Base max tokens for Anthropic responses
+ * When using thinking mode, actual max_tokens will be: max(ANTHROPIC_MAX_TOKENS, budget_tokens + 4096)
+ * to ensure max_tokens > thinking.budget_tokens as required by the API
  */
 export const ANTHROPIC_MAX_TOKENS = 4096;
 
