@@ -1,6 +1,49 @@
 import { z } from 'zod/v3';
 
 /**
+ * Base configuration for all LLM clients
+ */
+export interface BaseLlmClientConfig {
+  /**
+   * API key for the provider
+   */
+  apiKey: string;
+
+  /**
+   * The model to use
+   */
+  model: string;
+
+  /**
+   * Debug logging configuration
+   * - If true: always log debug messages
+   * - If false: never log debug messages
+   * - If undefined: auto-detect based on NODE_ENV (enabled in development)
+   */
+  debug?: boolean;
+}
+
+/**
+ * Options for batch processing
+ */
+export interface BatchProcessOptions<T, R> {
+  /**
+   * The items to process
+   */
+  items: T[];
+
+  /**
+   * The function to process each batch
+   */
+  processFn: (batch: T[]) => Promise<R[]>;
+
+  /**
+   * The size of each batch (default: 5)
+   */
+  batchSize?: number;
+}
+
+/**
  * Unified interface that all LLM clients must implement
  * This ensures consistent API across different providers
  */
@@ -38,11 +81,7 @@ export interface LlmClientInterface {
   /**
    * Process a batch of items with parallel processing
    */
-  processBatchWithLLM<T, R>(
-    items: T[],
-    processFn: (batch: T[]) => Promise<R[]>,
-    batchSize?: number
-  ): Promise<R[]>;
+  processBatchWithLLM<T, R>(options: BatchProcessOptions<T, R>): Promise<R[]>;
 
   /**
    * Generates an embedding vector for the provided text
