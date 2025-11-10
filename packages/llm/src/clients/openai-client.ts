@@ -116,7 +116,7 @@ export class OpenAIClient implements LlmClientInterface {
     prompt,
     schema,
     formatGuidance,
-    reasoningEffort = 'low',
+    reasoningEffort,
     maxAttempts = 1,
     logExecutionTime = false,
     responseInstructions,
@@ -165,7 +165,7 @@ export class OpenAIClient implements LlmClientInterface {
         // Use the responses.parse API
         const response = await this.openai.responses.parse({
           model: this.model,
-          reasoning: { effort: reasoningEffort },
+          ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }), // Only include reasoning if specified
           input: [
             {
               role: 'system',
