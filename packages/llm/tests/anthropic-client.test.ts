@@ -28,7 +28,12 @@ async function testAnthropicClient() {
 
   // Initialize client
   console.log('1. Initializing AnthropicClient...');
-  const client = new AnthropicClient(anthropicKey, 'claude-haiku-4-5-20251001', openaiKey);
+  const client = new AnthropicClient({
+    apiKey: anthropicKey,
+    model: 'claude-haiku-4-5-20251001',
+    openaiApiKey: openaiKey,
+    debug: false, // Disable debug for tests
+  });
   console.log('✓ Client initialized successfully\n');
 
   // Test 1: Basic structured response
