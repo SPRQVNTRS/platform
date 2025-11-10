@@ -28,12 +28,12 @@ async function testOpenRouterClient() {
 
   // Initialize client
   console.log('1. Initializing OpenRouterClient...');
-  const client = new OpenRouterClient(
-    openrouterKey,
-    'openai/gpt-5-mini',
-    true, // debug mode
-    openaiKey,
-  );
+  const client = new OpenRouterClient({
+    apiKey: openrouterKey,
+    model: 'openai/gpt-5-mini',
+    debug: false, // Disable debug for tests
+    openaiApiKey: openaiKey,
+  });
   console.log('✓ Client initialized successfully\n');
 
   // Test 1: Basic structured response
