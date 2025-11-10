@@ -22,11 +22,11 @@ async function testOpenAIClient() {
 
   // Initialize client
   console.log('1. Initializing OpenAIClient...');
-  const client = new OpenAIClient(
-    openaiKey,
-    'gpt-4o-mini',
-    true // debug mode
-  );
+  const client = new OpenAIClient({
+    apiKey: openaiKey,
+    model: 'gpt-4o-mini',
+    debug: false, // Disable debug for tests
+  });
   console.log('✓ Client initialized successfully\n');
 
   // Test 1: Basic structured response
