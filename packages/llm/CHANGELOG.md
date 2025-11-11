@@ -1,5 +1,19 @@
 # @sprqvntrs/llm
 
+## 2.0.0
+
+### Major Changes
+
+- a8251c7: Refactor: split createResponse into text and raw response methods
+  - Change createResponse to return extracted text as string instead of raw response
+  - Add createRawResponse method to return full response object for metadata access
+  - Add private extractContentFromResponse helper method to each client
+  - Update interface to reflect new return types
+
+  This improves the API by providing a clear separation of concerns:
+  - Use createResponse for simple text extraction
+  - Use createRawResponse when you need usage stats, finish reasons, etc.
+
 ## 1.2.0
 
 ### Minor Changes
