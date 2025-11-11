@@ -84,18 +84,50 @@ export class OpenRouterClient implements LlmClientInterface {
   }
 
   /**
-   * Creates a raw response from OpenRouter's API without structured output
+   * Creates a response from OpenRouter's API and returns the text content
+   * Uses the chat API which is stateless when used without conversation history.
    *
    * @param prompt The prompt to send to the model
-   * @returns The raw chat completion response from OpenRouter
+   * @returns The text content as a string
    */
-  async createResponse(prompt: string): Promise<unknown> {
+  async createResponse(prompt: string): Promise<string> {
+    const response = await this.createRawResponse(prompt);
+    return this.extractContentFromResponse(response);
+  }
+
+  /**
+   * Creates a raw response from OpenRouter's API and returns the full response object
+   * Use this when you need access to metadata like usage stats, finish reason, etc.
+   * Uses the chat API which is stateless when used without conversation history.
+   *
+   * @param prompt The prompt to send to the model
+   * @returns The complete chat completion response from OpenRouter
+   */
+  async createRawResponse(prompt: string): Promise<unknown> {
     const response = await this.client.chat.send({
       model: this.model,
       messages: [{ role: 'user', content: prompt }],
       stream: false,
     });
+
     return response;
+  }
+
+  /**
+   * Extracts text content from a raw OpenRouter response object
+   * OpenRouter's chat API returns responses with a 'message.content' field in choices
+   *
+   * @param response The raw response from OpenRouter
+   * @returns The text content as a string
+   * @throws Error if there is no content in the response
+   */
+  private extractContentFromResponse(response: unknown): string {
+    const typedResponse = response as any;
+    const content = typedResponse.choices?.[0]?.message?.content;
+    if (!content) {
+      throw new Error('No content in OpenRouter response');
+    }
+    return typeof content === 'string' ? content : JSON.stringify(content);
   }
 
   /**
@@ -158,35 +190,21 @@ export class OpenRouterClient implements LlmClientInterface {
           hasFormatter: !!this.formatterClient,
         });
 
-        // Build the system message
-        const systemMessage =
+        // Build the full prompt with system instructions for completions API
+        const systemInstructions =
           'You are an expert assistant. Respond with valid JSON data matching the provided schema. ' +
           (effectiveFormatGuidance ? `\n${effectiveFormatGuidance}` : '');
 
-        // Map reasoning effort to OpenRouter's reasoning parameter
-        const reasoningConfig = this.mapReasoningEffort(reasoningEffort);
+        const fullPrompt = `${systemInstructions}\n\nUser request: ${prompt}`;
 
-        // Step 1: Generate response from OpenRouter
-        const response = await this.client.chat.send({
-          model: this.model,
-          messages: [
-            { role: 'system', content: systemMessage },
-            { role: 'user', content: prompt },
-          ],
-          ...(reasoningConfig && { reasoning: reasoningConfig }),
-          stream: false,
-        });
+        // Step 1: Generate response from OpenRouter using createResponse
+        // Note: We use createRawResponse to access usage stats for logging
+        const response = await this.createRawResponse(fullPrompt);
 
-        this.logger.logUsage(response.usage || {});
+        this.logger.logUsage((response as any).usage || {});
 
-        // Extract the content
-        const content = response.choices[0]?.message?.content;
-        if (!content) {
-          throw new Error('No content in OpenRouter response');
-        }
-
-        // Ensure content is a string
-        const contentString = typeof content === 'string' ? content : JSON.stringify(content);
+        // Step 2: Extract the content using the standardized method
+        const contentString = this.extractContentFromResponse(response);
 
         // Step 2: Format and validate the response
         let validatedContent: z.infer<T>;
@@ -244,27 +262,6 @@ export class OpenRouterClient implements LlmClientInterface {
     }
 
     throw lastError || new Error('Failed to get structured response from LLM');
-  }
-
-  /**
-   * Maps normalized reasoning effort levels to OpenRouter's reasoning configuration
-   *
-   * @param effort The normalized effort level
-   * @returns OpenRouter reasoning config or undefined if not applicable
-   */
-  private mapReasoningEffort(
-    effort: 'low' | 'medium' | 'high',
-  ): { effort: 'minimal' | 'low' | 'medium' | 'high' } | undefined {
-    // Only apply reasoning for models that support it (like o1 models)
-    if (this.model.includes('o1') || this.model.includes('reasoning')) {
-      const effortMap: Record<string, 'minimal' | 'low' | 'medium' | 'high'> = {
-        low: 'minimal',
-        medium: 'medium',
-        high: 'high',
-      };
-      return { effort: effortMap[effort] || 'low' };
-    }
-    return undefined;
   }
 
   /**

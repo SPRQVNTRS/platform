@@ -39,12 +39,10 @@ async function testAnthropicClient() {
   // Test 1: Basic raw response
   console.log('2. Testing basic raw response...');
   try {
-    const rawResponse = await client.createResponse('What is the capital of France? Answer briefly.');
+    const textResponse = await client.createResponse('What is the capital of France? Answer briefly.');
 
     console.log('✓ Raw response received');
-    // Extract text content from Anthropic's response format
-    const textContent = rawResponse.content.find((block) => block.type === 'text');
-    console.log('  Message:', textContent?.text);
+    console.log('  Message:', textResponse);
     console.log();
   } catch (error) {
     console.error('✗ Test failed:', error);

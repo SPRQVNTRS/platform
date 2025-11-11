@@ -94,12 +94,24 @@ export class AnthropicClient implements LlmClientInterface {
   }
 
   /**
-   * Creates a raw response from Anthropic's API without structured output
+   * Creates a response from Anthropic's API and returns the text content
+   *
+   * @param prompt The prompt to send to the model
+   * @returns The text content as a string
+   */
+  async createResponse(prompt: string): Promise<string> {
+    const response = await this.createRawResponse(prompt);
+    return this.extractContentFromResponse(response);
+  }
+
+  /**
+   * Creates a raw response from Anthropic's API and returns the full response object
+   * Use this when you need access to metadata like usage stats, finish reason, etc.
    *
    * @param prompt The prompt to send to the model
    * @returns The raw message response from Anthropic
    */
-  async createResponse(prompt: string): Promise<Anthropic.Message> {
+  async createRawResponse(prompt: string): Promise<unknown> {
     const response = await this.client.messages.create({
       model: this.model,
       max_tokens: ANTHROPIC_MAX_TOKENS,
@@ -111,6 +123,23 @@ export class AnthropicClient implements LlmClientInterface {
       ],
     });
     return response;
+  }
+
+  /**
+   * Extracts text content from a raw Anthropic response object
+   * Anthropic's messages API returns responses with content blocks
+   *
+   * @param response The raw response from Anthropic
+   * @returns The text content as a string
+   * @throws Error if there is no content in the response
+   */
+  private extractContentFromResponse(response: unknown): string {
+    const typedResponse = response as Anthropic.Message;
+    const textBlock = typedResponse.content.find((block) => block.type === 'text');
+    if (!textBlock || textBlock.type !== 'text') {
+      throw new Error('No text content in Anthropic response');
+    }
+    return textBlock.text;
   }
 
   /**

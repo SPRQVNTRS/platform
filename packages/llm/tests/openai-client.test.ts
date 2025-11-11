@@ -35,7 +35,7 @@ async function testOpenAIClient() {
     const rawResponse = await client.createResponse('What is 2+2? Answer briefly.');
 
     console.log('✓ Raw response received');
-    console.log('  Message:', rawResponse.choices[0]?.message.content);
+    console.log('  Message:', rawResponse.output_text);
     console.log();
   } catch (error) {
     console.error('✗ Test failed:', error);

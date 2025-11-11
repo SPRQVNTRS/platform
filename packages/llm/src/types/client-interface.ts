@@ -55,13 +55,22 @@ export interface LlmClientInterface {
   validateConfiguration(): boolean;
 
   /**
-   * Creates a raw response from the provider's API without structured output
-   * Returns the raw completion object from the provider
+   * Creates a raw response from the provider's API and returns the text content
+   * This is a simple, stateless method that extracts text automatically
    *
    * @param prompt The prompt to send to the model
-   * @returns The raw response from the provider
+   * @returns The text content as a string
    */
-  createResponse(prompt: string): Promise<unknown>;
+  createResponse(prompt: string): Promise<string>;
+
+  /**
+   * Creates a raw response from the provider's API and returns the full response object
+   * Use this when you need access to metadata like usage stats, finish reason, etc.
+   *
+   * @param prompt The prompt to send to the model
+   * @returns The raw response object from the provider
+   */
+  createRawResponse(prompt: string): Promise<unknown>;
 
   /**
    * Creates a structured response using the provider's API with Zod schema validation

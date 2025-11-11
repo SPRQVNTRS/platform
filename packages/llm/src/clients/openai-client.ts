@@ -53,53 +53,68 @@ export class OpenAIClient implements LlmClientInterface {
   }
 
   /**
-   * Creates a response with the specified prompt
+   * Creates a response from OpenAI's API and returns the text content
+   * Uses the responses API which is stateless
+   *
+   * @param prompt The prompt to send to the model
+   * @returns The text content as a string
+   */
+  async createResponse(prompt: string): Promise<string> {
+    const response = await this.createRawResponse(prompt);
+    return this.extractContentFromResponse(response);
+  }
+
+  /**
+   * Creates a raw response from OpenAI's API and returns the full response object
+   * Use this when you need access to metadata like usage stats, finish reason, etc.
    *
    * @param prompt The prompt to send to the model
    * @returns The raw response from OpenAI
    */
-  async createResponse(prompt: string): Promise<OpenAI.Chat.ChatCompletion> {
-    const params: OpenAI.Chat.ChatCompletionCreateParams = {
-      messages: [{ role: 'user', content: prompt }],
+  async createRawResponse(prompt: string): Promise<unknown> {
+    const response = await this.openai.responses.create({
+      input: prompt,
       model: this.model,
-    };
-    const completion = await this.openai.chat.completions.create(params);
-    return completion;
+    });
+    return response;
+  }
+
+  /**
+   * Extracts text content from a raw OpenAI response object
+   * OpenAI's responses API returns responses with an 'output_text' field
+   *
+   * @param response The raw response from OpenAI
+   * @returns The text content as a string
+   * @throws Error if there is no content in the response
+   */
+  private extractContentFromResponse(response: unknown): string {
+    const typedResponse = response as OpenAI.Responses.Response;
+    const text = typedResponse.output_text;
+    if (!text) {
+      throw new Error('No response content');
+    }
+    return text;
   }
 
   /**
    * Creates a response with a prediction to guide the model's response
    *
+   * Note: The responses API does not support predictions. This method will log a warning
+   * and fall back to the standard createResponse method.
+   *
    * @param prompt The prompt to send to the model
-   * @param prediction The prediction content to guide the model's response
-   * @returns The raw response from OpenAI
+   * @param prediction The prediction content to guide the model's response (not used with responses API)
+   * @returns The text content as a string
+   * @deprecated Predictions are not supported by the responses API. Use createResponse instead.
    */
   async createResponseWithPrediction(
     prompt: string,
     prediction: OpenAI.Chat.ChatCompletionPredictionContent,
-  ): Promise<OpenAI.Chat.ChatCompletion> {
-    const params: OpenAI.Chat.ChatCompletionCreateParams = {
-      messages: [{ role: 'user', content: prompt }],
-      model: this.model,
-      prediction,
-    };
-    const completion = await this.openai.chat.completions.create(params);
-    return completion;
-  }
-
-  /**
-   * Extracts the text content from a response
-   *
-   * @param completion The response from OpenAI
-   * @returns The text content of the response
-   * @throws Error if there is no content in the response
-   */
-  extractResponseText(completion: OpenAI.Chat.ChatCompletion): string {
-    const message = completion.choices[0]?.message.content;
-    if (!message) {
-      throw new Error('No response content');
-    }
-    return message;
+  ): Promise<string> {
+    this.logger.log('Warning: Predictions are not supported by the responses API. Ignoring prediction parameter.', {
+      predictionProvided: !!prediction,
+    });
+    return this.createResponse(prompt);
   }
 
   /**
@@ -170,15 +185,10 @@ export class OpenAIClient implements LlmClientInterface {
         const response = await this.openai.responses.parse({
           model: this.model,
           ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }), // Only include reasoning if specified
-          input: [
-            {
-              role: 'system',
-              content:
-                'You are an expert assistant. Respond with valid data matching the provided schema. ' +
-                (effectiveFormatGuidance ? `\n${effectiveFormatGuidance}` : ''),
-            },
-            { role: 'user', content: prompt },
-          ],
+          instructions:
+            'You are an expert assistant. Respond with valid data matching the provided schema. ' +
+            (effectiveFormatGuidance ? `\n${effectiveFormatGuidance}` : ''),
+          input: prompt,
           text: {
             format: textFormat,
           },

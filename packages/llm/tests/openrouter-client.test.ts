@@ -39,12 +39,10 @@ async function testOpenRouterClient() {
   // Test 1: Basic raw response
   console.log('2. Testing basic raw response...');
   try {
-    const rawResponse = (await client.createResponse('What is 5+7? Answer briefly.')) as {
-      choices: Array<{ message?: { content?: string } }>;
-    };
+    const textResponse = await client.createResponse('What is 5+7? Answer briefly.');
 
     console.log('✓ Raw response received');
-    console.log('  Message:', rawResponse.choices[0]?.message?.content);
+    console.log('  Message:', textResponse);
     console.log();
   } catch (error) {
     console.error('✗ Test failed:', error);
