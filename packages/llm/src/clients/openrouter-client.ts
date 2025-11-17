@@ -1,9 +1,14 @@
 import { OpenRouter } from '@openrouter/sdk';
 import { z } from 'zod/v3';
-import type { LlmClientInterface, BaseLlmClientConfig } from '../types/client-interface';
+import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk } from '../types/client-interface';
 import { DEFAULT_MODELS } from '../models';
 import { OpenAIClient } from './openai-client';
 import { DebugLogger } from '../utils/debug';
+import {
+  generateRequestId,
+  wrapSdkError,
+  type LlmErrorContext,
+} from '../utils/errors';
 
 export interface OpenRouterClientConfig extends Omit<BaseLlmClientConfig, 'model'> {
   /**
@@ -31,6 +36,8 @@ export class OpenRouterClient implements LlmClientInterface {
   private model: string;
   private logger: DebugLogger;
   private formatterClient?: OpenAIClient;
+  private timeout: number;
+  private maxRetries: number;
 
   /**
    * Creates a new OpenRouterClient instance
@@ -39,8 +46,16 @@ export class OpenRouterClient implements LlmClientInterface {
    * @throws Error if the API key is not configured
    */
   constructor(config: OpenRouterClientConfig) {
+    // Use config timeout or default to 120 seconds (2 minutes)
+    // OpenRouter acts as a proxy, so we use a more conservative default
+    this.timeout = config.timeout ?? 120000;
+    this.maxRetries = config.maxRetries ?? 2;
+
     this.client = new OpenRouter({
       apiKey: config.apiKey,
+      timeoutMs: this.timeout,
+      // Note: OpenRouter SDK doesn't support maxRetries configuration
+      // Retry logic is handled by the SDK internally
     });
     this.model = config.model || 'google/gemini-2.5-flash-lite-preview-09-2025';
     this.logger = new DebugLogger('OpenRouterClient', { enabled: config.debug });
@@ -51,9 +66,11 @@ export class OpenRouterClient implements LlmClientInterface {
         apiKey: config.openaiApiKey,
         model: DEFAULT_MODELS.STRUCTURED_FORMATTER.model,
         debug: config.debug,
+        timeout: this.timeout,
+        maxRetries: this.maxRetries,
       });
     } else {
-      this.logger.log('⚠️  No OpenAI API key provided. Structured responses will attempt direct JSON generation.');
+      this.logger.logWarning('No OpenAI API key provided. Structured responses will attempt direct JSON generation.');
     }
 
     // Validate configuration on instantiation
@@ -131,6 +148,73 @@ export class OpenRouterClient implements LlmClientInterface {
   }
 
   /**
+   * Creates a streaming response from OpenRouter's API
+   * Returns an async iterator that yields chunks of text as they arrive
+   *
+   * @param prompt The prompt to send to the model
+   * @returns An async iterable of stream chunks
+   */
+  async *createStreamingResponse(prompt: string): AsyncIterable<StreamChunk> {
+    const requestId = generateRequestId();
+    const startTime = Date.now();
+
+    this.logger.log('createStreamingResponse called', {
+      modelUsed: this.model,
+      requestId,
+    });
+
+    try {
+      const stream = await this.client.chat.send({
+        model: this.model,
+        messages: [{ role: 'user', content: prompt }],
+        stream: true,
+      });
+
+      let accumulatedText = '';
+
+      for await (const chunk of stream as any) {
+        const content = chunk.choices?.[0]?.delta?.content;
+        if (content) {
+          accumulatedText += content;
+
+          yield {
+            text: content,
+            isComplete: false,
+            accumulatedText,
+          };
+        }
+      }
+
+      // Final chunk
+      const elapsedMs = Date.now() - startTime;
+      this.logger.log(`Streaming completed in ${elapsedMs}ms`);
+
+      yield {
+        text: '',
+        isComplete: true,
+        accumulatedText,
+      };
+    } catch (error) {
+      const elapsedMs = Date.now() - startTime;
+      const context: LlmErrorContext = {
+        clientType: 'openrouter',
+        model: this.model,
+        elapsedMs,
+        timeoutMs: this.timeout,
+        operation: 'createStreamingResponse',
+        requestId,
+        metadata: {
+          promptSize: prompt.length,
+        },
+      };
+
+      const wrappedError = wrapSdkError(error, context);
+      this.logger.logError('Streaming failed', wrappedError, wrappedError.context);
+      throw wrappedError;
+    }
+  }
+
+  /**
    * Creates a structured response using OpenRouter with hybrid formatting approach
    * Similar to AnthropicClient, this uses OpenRouter for generation and optionally
    * OpenAI for structured output formatting when available.
@@ -144,6 +228,7 @@ export class OpenRouterClient implements LlmClientInterface {
    * @param options.logExecutionTime Whether to log execution time warnings (default: false)
    * @param options.responseInstructions Additional instructions to append to the prompt (deprecated, use formatGuidance)
    * @param options.useWebSearch Whether to enable web search for this request (default: false)
+   * @param options.stream Whether to use streaming for the generation phase (default: false)
    * @returns The structured and validated response according to the provided schema
    * @throws Error if the response cannot be parsed or if the model refuses to respond
    */
@@ -155,6 +240,7 @@ export class OpenRouterClient implements LlmClientInterface {
     maxAttempts = 1,
     logExecutionTime = false,
     responseInstructions,
+    stream = false,
   }: {
     prompt: string;
     schema: T;
@@ -164,6 +250,7 @@ export class OpenRouterClient implements LlmClientInterface {
     logExecutionTime?: boolean;
     responseInstructions?: string;
     useWebSearch?: boolean;
+    stream?: boolean;
   }): Promise<z.infer<T>> {
     // Handle deprecated responseInstructions parameter
     const effectiveFormatGuidance =
@@ -172,15 +259,15 @@ export class OpenRouterClient implements LlmClientInterface {
         : responseInstructions
       : formatGuidance;
 
+    const requestId = generateRequestId();
     let attempts = 0;
     let lastError: unknown;
 
     while (attempts < maxAttempts) {
       attempts++;
+      const startTime = Date.now();
 
       try {
-        const startTime = Date.now();
-
         this.logger.log('createStructuredResponse called', {
           modelUsed: this.model,
           schemaType: typeof schema,
@@ -188,6 +275,8 @@ export class OpenRouterClient implements LlmClientInterface {
           reasoningEffort,
           attempt: `${attempts}/${maxAttempts}`,
           hasFormatter: !!this.formatterClient,
+          stream,
+          requestId,
         });
 
         // Build the full prompt with system instructions for completions API
@@ -206,7 +295,7 @@ export class OpenRouterClient implements LlmClientInterface {
         // Step 2: Extract the content using the standardized method
         const contentString = this.extractContentFromResponse(response);
 
-        // Step 2: Format and validate the response
+        // Step 3: Format and validate the response
         let validatedContent: z.infer<T>;
 
         if (this.formatterClient) {
@@ -232,31 +321,53 @@ export class OpenRouterClient implements LlmClientInterface {
         }
 
         // Log execution time
+        const executionTime = Date.now() - startTime;
         if (logExecutionTime || this.logger.isEnabled()) {
-          const executionTime = Date.now() - startTime;
           this.logger.logExecutionTime('createStructuredResponse', executionTime);
         }
 
         return validatedContent;
       } catch (error) {
         lastError = error;
+        const elapsedMs = Date.now() - startTime;
+
+        const context: LlmErrorContext = {
+          clientType: 'openrouter',
+          model: this.model,
+          elapsedMs,
+          timeoutMs: this.timeout,
+          operation: 'createStructuredResponse',
+          requestId,
+          metadata: {
+            promptSize: prompt.length,
+            schemaComplexity: typeof schema,
+            attempt: attempts,
+            maxAttempts,
+            hasFormatter: !!this.formatterClient,
+          },
+        };
+
+        const wrappedError = wrapSdkError(error, context);
 
         this.logger.log(`Failed attempt ${attempts}/${maxAttempts}`, {
-          error: error instanceof Error ? error.message : String(error),
+          error: wrappedError.message,
+          elapsedMs,
         });
 
         if (attempts === maxAttempts) {
-          this.logger.log('createStructuredResponse error', {
-            error: error instanceof Error ? error.message : String(error),
-            errorName: error instanceof Error ? error.constructor.name : typeof error,
-            errorStack: error instanceof Error ? error.stack : undefined,
-          });
+          this.logger.logError(
+            'createStructuredResponse failed after all attempts',
+            wrappedError,
+            wrappedError.context,
+          );
+          throw wrappedError;
+        }
 
-          if (error instanceof Error) {
-            throw error;
-          } else {
-            throw new Error(`Failed to create structured response: ${String(error)}`);
-          }
+        // Wait before retrying (exponential backoff)
+        if (attempts < maxAttempts) {
+          const backoffMs = Math.min(1000 * Math.pow(2, attempts - 1), 10000);
+          this.logger.log(`Retrying after ${backoffMs}ms backoff...`);
+          await new Promise((resolve) => setTimeout(resolve, backoffMs));
         }
       }
     }

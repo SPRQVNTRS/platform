@@ -1,10 +1,15 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod/v3';
-import type { LlmClientInterface, BaseLlmClientConfig } from '../types/client-interface';
+import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk } from '../types/client-interface';
 import { DEFAULT_MODELS, ANTHROPIC_MAX_TOKENS, WEB_SEARCH_TOOLS } from '../models';
 import { OpenAIClient } from './openai-client';
 import { AnthropicModel } from '../model-types';
 import { DebugLogger } from '../utils/debug';
+import {
+  generateRequestId,
+  wrapSdkError,
+  type LlmErrorContext,
+} from '../utils/errors';
 
 export interface AnthropicClientConfig extends Omit<BaseLlmClientConfig, 'model'> {
   /**
@@ -28,6 +33,8 @@ export class AnthropicClient implements LlmClientInterface {
   private model: AnthropicModel;
   private formatterClient?: OpenAIClient;
   private logger: DebugLogger;
+  private timeout: number;
+  private maxRetries: number;
 
   /**
    * Creates a new AnthropicClient instance
@@ -36,10 +43,14 @@ export class AnthropicClient implements LlmClientInterface {
    * @throws Error if the Anthropic API key is not configured
    */
   constructor(config: AnthropicClientConfig) {
+    // Use config timeout or default to 120 seconds (2 minutes)
+    this.timeout = config.timeout ?? 120000;
+    this.maxRetries = config.maxRetries ?? 2;
+
     this.client = new Anthropic({
       apiKey: config.apiKey,
-      timeout: 240000, // 240 seconds (4 minutes) timeout for all requests
-      maxRetries: 2, // Retry failed requests up to 2 times
+      timeout: this.timeout,
+      maxRetries: this.maxRetries,
     });
     this.model = config.model;
     this.logger = new DebugLogger('AnthropicClient', { enabled: config.debug });
@@ -53,6 +64,8 @@ export class AnthropicClient implements LlmClientInterface {
         apiKey: openaiKey,
         model: DEFAULT_MODELS.STRUCTURED_FORMATTER.model,
         debug: config.debug,
+        timeout: this.timeout,
+        maxRetries: this.maxRetries,
       });
     }
 
@@ -158,6 +171,78 @@ export class AnthropicClient implements LlmClientInterface {
   }
 
   /**
+   * Creates a streaming response from Anthropic's API
+   * Returns an async iterator that yields chunks of text as they arrive
+   *
+   * @param prompt The prompt to send to the model
+   * @returns An async iterable of stream chunks
+   */
+  async *createStreamingResponse(prompt: string): AsyncIterable<StreamChunk> {
+    const requestId = generateRequestId();
+    const startTime = Date.now();
+
+    this.logger.log('createStreamingResponse called', {
+      modelUsed: this.model,
+      requestId,
+    });
+
+    try {
+      const stream = await this.client.messages.stream({
+        model: this.model,
+        max_tokens: ANTHROPIC_MAX_TOKENS,
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      });
+
+      let accumulatedText = '';
+
+      for await (const chunk of stream) {
+        if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+          const text = chunk.delta.text;
+          accumulatedText += text;
+
+          yield {
+            text,
+            isComplete: false,
+            accumulatedText,
+          };
+        }
+      }
+
+      // Final chunk
+      const elapsedMs = Date.now() - startTime;
+      this.logger.log(`Streaming completed in ${elapsedMs}ms`);
+
+      yield {
+        text: '',
+        isComplete: true,
+        accumulatedText,
+      };
+    } catch (error) {
+      const elapsedMs = Date.now() - startTime;
+      const context: LlmErrorContext = {
+        clientType: 'anthropic',
+        model: this.model,
+        elapsedMs,
+        timeoutMs: this.timeout,
+        operation: 'createStreamingResponse',
+        requestId,
+        metadata: {
+          promptSize: prompt.length,
+        },
+      };
+
+      const wrappedError = wrapSdkError(error, context);
+      this.logger.logError('Streaming failed', wrappedError, wrappedError.context);
+      throw wrappedError;
+    }
+  }
+
+  /**
    * Transforms reasoning effort level into Anthropic's thinking mode configuration
    *
    * @param reasoningEffort The normalized reasoning effort level
@@ -205,6 +290,7 @@ export class AnthropicClient implements LlmClientInterface {
    * @param options.logExecutionTime Whether to log execution time warnings (default: false)
    * @param options.responseInstructions Additional instructions to append to the prompt (deprecated, use formatGuidance)
    * @param options.useWebSearch Whether to enable web search for this request (default: false)
+   * @param options.stream Whether to use streaming for the generation phase (default: false)
    * @returns The structured and validated response according to the provided schema
    * @throws Error if no OpenAI formatter is configured
    */
@@ -217,6 +303,7 @@ export class AnthropicClient implements LlmClientInterface {
     logExecutionTime = false,
     responseInstructions,
     useWebSearch = false,
+    stream = false,
   }: {
     prompt: string;
     schema: T;
@@ -226,6 +313,7 @@ export class AnthropicClient implements LlmClientInterface {
     logExecutionTime?: boolean;
     responseInstructions?: string;
     useWebSearch?: boolean;
+    stream?: boolean;
   }): Promise<z.infer<T>> {
     if (!this.formatterClient) {
       throw new Error(
@@ -241,63 +329,96 @@ export class AnthropicClient implements LlmClientInterface {
         : responseInstructions
       : formatGuidance;
 
-    const startTime = logExecutionTime ? Date.now() : 0;
+    const requestId = generateRequestId();
+    const startTime = Date.now();
 
-    // Build tools array if web search is enabled
-    const tools = useWebSearch ? [WEB_SEARCH_TOOLS.ANTHROPIC] : undefined;
-
-    // Get thinking configuration based on reasoning effort
-    const thinking = this.getThinkingConfig(reasoningEffort);
-
-    // Calculate max_tokens: must be greater than thinking budget
-    // If thinking is enabled, we need max_tokens > budget_tokens
-    // Otherwise, use the default ANTHROPIC_MAX_TOKENS
-    const maxTokens = thinking ? Math.max(ANTHROPIC_MAX_TOKENS, thinking.budget_tokens + 4096) : ANTHROPIC_MAX_TOKENS;
-
-    // Step 1: Generate content with Anthropic
-    const anthropicResponse = await this.client.messages.create({
-      model: this.model,
-      max_tokens: maxTokens,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      ...(tools && { tools }), // Only include tools if web search is enabled
-      ...(thinking && { thinking }), // Only include thinking if reasoning effort is specified
+    this.logger.log('createStructuredResponse called', {
+      modelUsed: this.model,
+      reasoningEffort,
+      stream,
+      requestId,
     });
 
-    // Extract text content - when thinking mode is enabled, response may have multiple content blocks
-    // Find the text block (skip thinking blocks)
-    const textContent = anthropicResponse.content.find((block) => block.type === 'text');
-    if (!textContent || textContent.type !== 'text') {
-      // Log the actual response structure for debugging
-      this.logger.log('❌ Unexpected response structure', {
-        contentBlocks: anthropicResponse.content.map((block) => ({ type: block.type })),
+    try {
+      // Build tools array if web search is enabled
+      const tools = useWebSearch ? [WEB_SEARCH_TOOLS.ANTHROPIC] : undefined;
+
+      // Get thinking configuration based on reasoning effort
+      const thinking = this.getThinkingConfig(reasoningEffort);
+
+      // Calculate max_tokens: must be greater than thinking budget
+      // If thinking is enabled, we need max_tokens > budget_tokens
+      // Otherwise, use the default ANTHROPIC_MAX_TOKENS
+      const maxTokens = thinking ? Math.max(ANTHROPIC_MAX_TOKENS, thinking.budget_tokens + 4096) : ANTHROPIC_MAX_TOKENS;
+
+      // Step 1: Generate content with Anthropic
+      const anthropicResponse = await this.client.messages.create({
+        model: this.model,
+        max_tokens: maxTokens,
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        ...(tools && { tools }), // Only include tools if web search is enabled
+        ...(thinking && { thinking }), // Only include thinking if reasoning effort is specified
       });
-      throw new Error('Expected text response from Anthropic');
-    }
 
-    this.logger.logResponsePreview(textContent.text);
+      // Extract text content - when thinking mode is enabled, response may have multiple content blocks
+      // Find the text block (skip thinking blocks)
+      const textContent = anthropicResponse.content.find((block) => block.type === 'text');
+      if (!textContent || textContent.type !== 'text') {
+        // Log the actual response structure for debugging
+        this.logger.logError('Unexpected response structure', undefined, {
+          contentBlocks: anthropicResponse.content.map((block) => ({ type: block.type })),
+        });
+        throw new Error('Expected text response from Anthropic');
+      }
 
-    // Step 2: Use OpenAI to format the response into the required schema
-    const formattedResponse = await this.formatterClient.createStructuredResponse({
-      prompt: textContent.text,
-      schema,
-      formatGuidance: effectiveFormatGuidance,
-      reasoningEffort: 'low', // Formatting doesn't need high reasoning
-      maxAttempts, // Pass through retry logic to formatter
-      logExecutionTime: false, // We'll log our own execution time
-    });
+      this.logger.logResponsePreview(textContent.text);
 
-    // Log execution time
-    if (logExecutionTime || this.logger.isEnabled()) {
+      // Step 2: Use OpenAI to format the response into the required schema
+      const formattedResponse = await this.formatterClient.createStructuredResponse({
+        prompt: textContent.text,
+        schema,
+        formatGuidance: effectiveFormatGuidance,
+        reasoningEffort: 'low', // Formatting doesn't need high reasoning
+        maxAttempts, // Pass through retry logic to formatter
+        logExecutionTime: false, // We'll log our own execution time
+      });
+
+      // Log execution time
       const executionTime = Date.now() - startTime;
-      this.logger.logExecutionTime('createStructuredResponse', executionTime);
-    }
+      if (logExecutionTime || this.logger.isEnabled()) {
+        this.logger.logExecutionTime('createStructuredResponse', executionTime);
+      }
 
-    return formattedResponse;
+      return formattedResponse;
+    } catch (error) {
+      const elapsedMs = Date.now() - startTime;
+      const context: LlmErrorContext = {
+        clientType: 'anthropic',
+        model: this.model,
+        elapsedMs,
+        timeoutMs: this.timeout,
+        operation: 'createStructuredResponse',
+        requestId,
+        metadata: {
+          promptSize: prompt.length,
+          schemaComplexity: typeof schema,
+          reasoningEffort,
+        },
+      };
+
+      const wrappedError = wrapSdkError(error, context);
+      this.logger.logError(
+        'createStructuredResponse failed',
+        wrappedError,
+        wrappedError.context,
+      );
+      throw wrappedError;
+    }
   }
 
   /**
