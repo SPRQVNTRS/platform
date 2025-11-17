@@ -6,21 +6,48 @@ Private monorepo for `@sprqvntrs` scoped packages published to GitHub Packages.
 
 - **[@sprqvntrs/llm](packages/llm)** - LLM integration utilities
 
-## 🚀 Publishing
+## 🛠️ Development Workflow
 
-### Quick Start (Claude Code)
+### Making Changes
 
-```
-/release "your changes"   # Create changeset → PR → merge → auto-publish
-/publish                   # Version & publish immediately
-```
+1. **Make your changes** to the code
+2. **Commit your changes** manually:
+   ```bash
+   git add .
+   git commit -m "feat: your feature description"
+   ```
+3. **Release the changes** using Claude Code:
+   ```
+   /release
+   ```
+   This will:
+   - Analyze what changed
+   - Create changesets for affected packages
+   - Version the packages
+   - Commit version changes
+   - Push to trigger GitHub Actions publishing
 
-### Manual Workflow
+### Manual Workflow (without Claude Code)
 
 ```bash
-pnpm changeset              # Create changeset
-git add . && git commit -m "feat: description" && git push
-# GitHub creates PR → merge to publish
+# 1. Make and commit your changes
+git add . && git commit -m "feat: description"
+
+# 2. Create a changeset
+pnpm changeset
+# Follow prompts to select packages and version bump type
+
+# 3. Commit the changeset
+git add .changeset && git commit -m "chore: add changeset"
+
+# 4. Version packages
+pnpm version-packages
+
+# 5. Commit version changes
+git add . && git commit -m "chore: version packages"
+
+# 6. Push to trigger publishing
+git push
 ```
 
 **Version types:** patch (0.0.X) | minor (0.X.0) | major (X.0.0)
@@ -115,10 +142,22 @@ mkdir -p packages/your-package
 
 **If token leaked:** Revoke at https://github.com/settings/tokens, remove from git history, regenerate
 
-## 🛠️ Development
+## 🛠️ Development Commands
 
 ```bash
 pnpm install    # Install dependencies
 pnpm format     # Format code
 pnpm clean      # Clean workspace
+```
+
+### Repository Structure
+
+```
+platform/
+├── packages/           # Published packages
+│   └── llm/           # @sprqvntrs/llm
+├── .changeset/        # Changeset files (created by /release)
+└── .claude/           # Claude Code configuration
+    └── commands/
+        └── release.md # /release command
 ```
