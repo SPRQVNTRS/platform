@@ -290,7 +290,7 @@ export class AnthropicClient implements LlmClientInterface {
    * @param options.logExecutionTime Whether to log execution time warnings (default: false)
    * @param options.responseInstructions Additional instructions to append to the prompt (deprecated, use formatGuidance)
    * @param options.useWebSearch Whether to enable web search for this request (default: false)
-   * @param options.stream Whether to use streaming for the generation phase (default: false)
+   * @param options.stream Whether to use streaming for the generation phase (default: true)
    * @returns The structured and validated response according to the provided schema
    * @throws Error if no OpenAI formatter is configured
    */
@@ -303,7 +303,7 @@ export class AnthropicClient implements LlmClientInterface {
     logExecutionTime = false,
     responseInstructions,
     useWebSearch = false,
-    stream = false,
+    stream = true,
   }: {
     prompt: string;
     schema: T;
@@ -351,41 +351,82 @@ export class AnthropicClient implements LlmClientInterface {
       // Otherwise, use the default ANTHROPIC_MAX_TOKENS
       const maxTokens = thinking ? Math.max(ANTHROPIC_MAX_TOKENS, thinking.budget_tokens + 4096) : ANTHROPIC_MAX_TOKENS;
 
-      // Step 1: Generate content with Anthropic
-      const anthropicResponse = await this.client.messages.create({
-        model: this.model,
-        max_tokens: maxTokens,
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        ...(tools && { tools }), // Only include tools if web search is enabled
-        ...(thinking && { thinking }), // Only include thinking if reasoning effort is specified
-      });
+      let textContent: string;
 
-      // Extract text content - when thinking mode is enabled, response may have multiple content blocks
-      // Find the text block (skip thinking blocks)
-      const textContent = anthropicResponse.content.find((block) => block.type === 'text');
-      if (!textContent || textContent.type !== 'text') {
-        // Log the actual response structure for debugging
-        this.logger.logError('Unexpected response structure', undefined, {
-          contentBlocks: anthropicResponse.content.map((block) => ({ type: block.type })),
+      if (stream) {
+        // Step 1: Generate content with Anthropic using streaming for observability
+        this.logger.log('Using streaming generation for observability');
+        let accumulatedText = '';
+        let lastLoggedLength = 0;
+
+        const messageStream = this.client.messages.stream({
+          model: this.model,
+          max_tokens: maxTokens,
+          messages: [
+            {
+              role: 'user',
+              content: prompt,
+            },
+          ],
+          ...(tools && { tools }),
+          ...(thinking && { thinking }),
         });
-        throw new Error('Expected text response from Anthropic');
+
+        for await (const chunk of messageStream) {
+          if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+            const text = chunk.delta.text;
+            accumulatedText += text;
+
+            // Log progress every 100 characters for observability
+            if (accumulatedText.length - lastLoggedLength >= 100) {
+              this.logger.log(`Streaming progress: ${accumulatedText.length} chars`);
+              lastLoggedLength = accumulatedText.length;
+            }
+          }
+        }
+
+        this.logger.log(`Streaming completed, total: ${accumulatedText.length} chars`);
+        textContent = accumulatedText;
+      } else {
+        // Non-streaming path
+        const anthropicResponse = await this.client.messages.create({
+          model: this.model,
+          max_tokens: maxTokens,
+          messages: [
+            {
+              role: 'user',
+              content: prompt,
+            },
+          ],
+          ...(tools && { tools }),
+          ...(thinking && { thinking }),
+        });
+
+        // Extract text content - when thinking mode is enabled, response may have multiple content blocks
+        // Find the text block (skip thinking blocks)
+        const textBlock = anthropicResponse.content.find((block) => block.type === 'text');
+        if (!textBlock || textBlock.type !== 'text') {
+          // Log the actual response structure for debugging
+          this.logger.logError('Unexpected response structure', undefined, {
+            contentBlocks: anthropicResponse.content.map((block) => ({ type: block.type })),
+          });
+          throw new Error('Expected text response from Anthropic');
+        }
+
+        textContent = textBlock.text;
       }
 
-      this.logger.logResponsePreview(textContent.text);
+      this.logger.logResponsePreview(textContent);
 
       // Step 2: Use OpenAI to format the response into the required schema
       const formattedResponse = await this.formatterClient.createStructuredResponse({
-        prompt: textContent.text,
+        prompt: textContent,
         schema,
         formatGuidance: effectiveFormatGuidance,
         reasoningEffort: 'low', // Formatting doesn't need high reasoning
         maxAttempts, // Pass through retry logic to formatter
         logExecutionTime: false, // We'll log our own execution time
+        stream: false, // Don't stream the formatting step, only the generation
       });
 
       // Log execution time

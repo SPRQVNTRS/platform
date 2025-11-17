@@ -43,6 +43,16 @@ pnpm test:openrouter   # Test OpenRouter client
     Total text length: 234 chars
   ```
 
+### 2b. Streaming in Structured Responses (NEW)
+- **What it tests**: `createStructuredResponse()` with default `stream: true` parameter
+- **Expected result**: Generation phase uses streaming for observability, final result is parsed correctly
+- **Example output**:
+  ```
+  ✓ Structured response with default streaming succeeded
+    Result: { answer: 10 }
+    (Check logs above for "Using streaming generation for observability")
+  ```
+
 ### 3. Error Handling Tests
 - **What it tests**: Enriched error context with LlmError classes
 - **Expected result**: Errors include client type, model, request ID, elapsed time, timeout config

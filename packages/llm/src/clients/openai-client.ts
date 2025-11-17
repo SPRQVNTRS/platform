@@ -210,7 +210,7 @@ export class OpenAIClient implements LlmClientInterface {
    * @param options.logExecutionTime Whether to log execution time warnings (default: false)
    * @param options.responseInstructions Additional instructions to append to the prompt (deprecated, use formatGuidance)
    * @param options.useWebSearch Whether to enable web search for this request (default: false)
-   * @param options.stream Whether to use streaming for the generation phase (default: false)
+   * @param options.stream Whether to use streaming for the generation phase (default: true)
    * @returns The structured and validated response according to the provided schema
    * @throws Error if the response cannot be parsed or if the model refuses to respond
    */
@@ -223,7 +223,7 @@ export class OpenAIClient implements LlmClientInterface {
     logExecutionTime = false,
     responseInstructions,
     useWebSearch = false,
-    stream = false,
+    stream = true,
   }: {
     prompt: string;
     schema: T;
@@ -266,27 +266,72 @@ export class OpenAIClient implements LlmClientInterface {
         // Build tools array if web search is enabled
         const tools = useWebSearch ? [WEB_SEARCH_TOOLS.OPENAI] : undefined;
 
-        // Use the responses.parse API
-        const response = await this.openai.responses.parse({
-          model: this.model,
-          ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }), // Only include reasoning if specified
-          instructions:
-            'You are an expert assistant. Respond with valid data matching the provided schema. ' +
-            (effectiveFormatGuidance ? `\n${effectiveFormatGuidance}` : ''),
-          input: prompt,
-          text: {
-            format: textFormat,
-          },
-          ...(tools && { tools }), // Only include tools if web search is enabled
-        });
+        let parsedOutput: any;
 
-        this.logger.logUsage(response.usage || {});
+        if (stream) {
+          // Use streaming for better observability - accumulate the response then parse
+          this.logger.log('Using streaming generation for observability');
+          let accumulatedText = '';
+          let lastLoggedLength = 0;
 
-        // Get the parsed output
-        const parsedOutput = response.output_parsed;
+          // Stream the response with structured output format
+          const streamResponse = this.openai.responses.stream({
+            model: this.model,
+            ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }),
+            instructions:
+              'You are an expert assistant. Respond with valid data matching the provided schema. ' +
+              (effectiveFormatGuidance ? `\n${effectiveFormatGuidance}` : ''),
+            input: prompt,
+            text: {
+              format: textFormat,
+            },
+            ...(tools && { tools }),
+          });
 
-        if (!parsedOutput) {
-          throw new Error('No parsed output in response');
+          for await (const chunk of streamResponse) {
+            if (chunk.type === 'response.output_text.delta' && 'delta' in chunk) {
+              const text = (chunk as any).delta;
+              if (text) {
+                accumulatedText += text;
+
+                // Log progress every 100 characters for observability
+                if (accumulatedText.length - lastLoggedLength >= 100) {
+                  this.logger.log(`Streaming progress: ${accumulatedText.length} chars`);
+                  lastLoggedLength = accumulatedText.length;
+                }
+              }
+            }
+          }
+
+          this.logger.log(`Streaming completed, total: ${accumulatedText.length} chars, parsing...`);
+
+          // Parse the accumulated JSON response
+          try {
+            parsedOutput = JSON.parse(accumulatedText);
+          } catch (parseError) {
+            throw new Error(`Failed to parse streamed response as JSON: ${parseError}`);
+          }
+        } else {
+          // Non-streaming path using responses.parse API
+          const response = await this.openai.responses.parse({
+            model: this.model,
+            ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }),
+            instructions:
+              'You are an expert assistant. Respond with valid data matching the provided schema. ' +
+              (effectiveFormatGuidance ? `\n${effectiveFormatGuidance}` : ''),
+            input: prompt,
+            text: {
+              format: textFormat,
+            },
+            ...(tools && { tools }),
+          });
+
+          this.logger.logUsage(response.usage || {});
+          parsedOutput = response.output_parsed;
+
+          if (!parsedOutput) {
+            throw new Error('No parsed output in response');
+          }
         }
 
         // Validate with the schema (for extra safety)
