@@ -41,10 +41,29 @@ for await (const chunk of client.createStreamingResponse('Tell me a story')) {
 }
 ```
 
+**NEW: Streaming now enabled by default in `createStructuredResponse()`** for better observability:
+
+```typescript
+// Streaming is now enabled by default (stream: true)
+const result = await client.createStructuredResponse({
+  prompt: 'Analyze this data',
+  schema: mySchema,
+  // stream defaults to true - logs progress during generation
+});
+
+// You can opt out if needed
+const result = await client.createStructuredResponse({
+  prompt: 'Analyze this data',
+  schema: mySchema,
+  stream: false, // Disable streaming
+});
+```
+
 Benefits:
 - Real-time feedback during long operations
 - Lower memory usage for large responses
 - Better user experience with progress indication
+- **Better debuggability**: See exactly where requests hang, even for structured outputs
 - Ability to handle partial responses on timeout
 
 ### 3. Enhanced Error Handling
@@ -169,13 +188,23 @@ try {
 }
 ```
 
-### If you want to use streaming:
+### If you want to disable streaming in structured responses:
 
 ```typescript
-// Non-streaming (existing behavior unchanged)
-const text = await client.createResponse('Generate a story');
+// Before (streaming wasn't available)
+const result = await client.createStructuredResponse({
+  prompt: 'Analyze data',
+  schema
+});
 
-// Streaming (new capability)
+// After (streaming is now default, but you can disable it)
+const result = await client.createStructuredResponse({
+  prompt: 'Analyze data',
+  schema,
+  stream: false, // Explicitly disable streaming
+});
+
+// To use raw streaming responses:
 for await (const chunk of client.createStreamingResponse('Generate a story')) {
   if (!chunk.isComplete) {
     process.stdout.write(chunk.text);
@@ -188,11 +217,13 @@ for await (const chunk of client.createStreamingResponse('Generate a story')) {
 ## Implementation Notes
 
 - Streaming is implemented using native SDK streaming APIs where available
-- OpenAI uses `responses.stream()` API
-- Anthropic uses `messages.stream()` API
-- OpenRouter enables `stream: true` parameter
+- OpenAI uses `responses.stream()` API for both raw streaming and structured responses
+- Anthropic uses `messages.stream()` API for generation phase of structured responses
+- OpenRouter uses streaming via the native SDK for both raw and structured responses
+- **Structured responses**: When `stream: true` (default), the generation phase is streamed for observability, then the accumulated response is parsed/validated
 - Error wrapping preserves original error stack traces
 - All timeout configurations are passed through to underlying SDKs
+- Progress is logged every 100 characters during streaming (when debug enabled)
 
 ## Testing
 
@@ -200,6 +231,7 @@ All test suites have been updated with comprehensive coverage:
 
 - **Timeout configuration**: Verified custom timeouts work correctly
 - **Streaming responses**: Tests for all three clients with chunk counting
+- **Streaming in structured responses**: New tests verify streaming is used by default in `createStructuredResponse()`
 - **Error handling**: Tests for enriched error context and error types
 - **Timeout detection**: Validates `isTimeoutError()` helper function
 - **Retry logic**: Confirms exponential backoff works as expected

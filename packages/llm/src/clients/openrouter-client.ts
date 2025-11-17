@@ -228,7 +228,7 @@ export class OpenRouterClient implements LlmClientInterface {
    * @param options.logExecutionTime Whether to log execution time warnings (default: false)
    * @param options.responseInstructions Additional instructions to append to the prompt (deprecated, use formatGuidance)
    * @param options.useWebSearch Whether to enable web search for this request (default: false)
-   * @param options.stream Whether to use streaming for the generation phase (default: false)
+   * @param options.stream Whether to use streaming for the generation phase (default: true)
    * @returns The structured and validated response according to the provided schema
    * @throws Error if the response cannot be parsed or if the model refuses to respond
    */
@@ -240,7 +240,7 @@ export class OpenRouterClient implements LlmClientInterface {
     maxAttempts = 1,
     logExecutionTime = false,
     responseInstructions,
-    stream = false,
+    stream = true,
   }: {
     prompt: string;
     schema: T;
@@ -286,14 +286,35 @@ export class OpenRouterClient implements LlmClientInterface {
 
         const fullPrompt = `${systemInstructions}\n\nUser request: ${prompt}`;
 
-        // Step 1: Generate response from OpenRouter using createResponse
-        // Note: We use createRawResponse to access usage stats for logging
-        const response = await this.createRawResponse(fullPrompt);
+        let contentString: string;
 
-        this.logger.logUsage((response as any).usage || {});
+        if (stream) {
+          // Step 1: Generate response using streaming for observability
+          this.logger.log('Using streaming generation for observability');
+          let accumulatedText = '';
+          let lastLoggedLength = 0;
 
-        // Step 2: Extract the content using the standardized method
-        const contentString = this.extractContentFromResponse(response);
+          for await (const chunk of this.createStreamingResponse(fullPrompt)) {
+            if (!chunk.isComplete) {
+              accumulatedText += chunk.text;
+
+              // Log progress every 100 characters for observability
+              if (accumulatedText.length - lastLoggedLength >= 100) {
+                this.logger.log(`Streaming progress: ${accumulatedText.length} chars`);
+                lastLoggedLength = accumulatedText.length;
+              }
+            }
+          }
+
+          this.logger.log(`Streaming completed, total: ${accumulatedText.length} chars`);
+          contentString = accumulatedText;
+        } else {
+          // Non-streaming path
+          // Note: We use createRawResponse to access usage stats for logging
+          const response = await this.createRawResponse(fullPrompt);
+          this.logger.logUsage((response as any).usage || {});
+          contentString = this.extractContentFromResponse(response);
+        }
 
         // Step 3: Format and validate the response
         let validatedContent: z.infer<T>;
@@ -307,6 +328,7 @@ export class OpenRouterClient implements LlmClientInterface {
             schema,
             formatGuidance: effectiveFormatGuidance,
             maxAttempts: 1,
+            stream: false, // Don't stream the formatting step, only the generation
           });
         } else {
           // Try to parse directly as JSON

@@ -137,7 +137,7 @@ export interface LlmClientInterface {
    * @param options.logExecutionTime Whether to log execution time warnings (default: false)
    * @param options.responseInstructions Additional instructions to append to the prompt (deprecated, use formatGuidance)
    * @param options.useWebSearch Whether to enable web search for this request (default: false)
-   * @param options.stream Whether to use streaming for the generation phase (default: false)
+   * @param options.stream Whether to use streaming for the generation phase (default: true)
    */
   createStructuredResponse<T extends z.ZodType>(options: {
     prompt: string;

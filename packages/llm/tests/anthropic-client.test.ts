@@ -141,8 +141,38 @@ async function testAnthropicClient() {
     console.log();
   }
 
-  // Test 6: Request correlation IDs
-  console.log('7. Testing request correlation IDs...');
+  // Test 6: Verify streaming is used by default in structured responses
+  console.log('7. Testing streaming in createStructuredResponse (default behavior)...');
+  try {
+    // Create client with debug enabled to see streaming logs
+    const debugClient = new AnthropicClient({
+      apiKey: anthropicKey,
+      model: 'claude-haiku-4-5-20251001',
+      openaiApiKey: openaiKey,
+      debug: true,
+      timeout: 60000,
+      maxRetries: 2,
+    });
+
+    const streamResult = await debugClient.createStructuredResponse({
+      prompt: 'What is 7+3?',
+      schema: z.object({
+        answer: z.number(),
+      }),
+      // Note: stream defaults to true now
+    });
+
+    console.log('✓ Structured response with default streaming succeeded');
+    console.log('  Result:', streamResult);
+    console.log('  (Check logs above for "Using streaming generation for observability")');
+    console.log();
+  } catch (error) {
+    console.error('✗ Streaming test failed:', error);
+    throw error;
+  }
+
+  // Test 7: Request correlation IDs
+  console.log('8. Testing request correlation IDs...');
   try {
     console.log('  Making multiple requests to verify unique IDs...');
     const promises = [

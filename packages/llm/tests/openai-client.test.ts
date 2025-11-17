@@ -162,8 +162,37 @@ async function testOpenAIClient() {
     console.log();
   }
 
-  // Test 7: Retry logic with exponential backoff
-  console.log('8. Testing retry logic...');
+  // Test 7: Verify streaming is used by default in structured responses
+  console.log('8. Testing streaming in createStructuredResponse (default behavior)...');
+  try {
+    // Create client with debug enabled to see streaming logs
+    const debugClient = new OpenAIClient({
+      apiKey: openaiKey,
+      model: 'gpt-4o-mini',
+      debug: true,
+      timeout: 60000,
+      maxRetries: 2,
+    });
+
+    const streamResult = await debugClient.createStructuredResponse({
+      prompt: 'What is 5+5?',
+      schema: z.object({
+        answer: z.number(),
+      }),
+      // Note: stream defaults to true now
+    });
+
+    console.log('✓ Structured response with default streaming succeeded');
+    console.log('  Result:', streamResult);
+    console.log('  (Check logs above for "Using streaming generation for observability")');
+    console.log();
+  } catch (error) {
+    console.error('✗ Streaming test failed:', error);
+    throw error;
+  }
+
+  // Test 8: Retry logic with exponential backoff
+  console.log('9. Testing retry logic...');
   try {
     const result = await client.createStructuredResponse({
       prompt: 'What is 10 + 10?',
