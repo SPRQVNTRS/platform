@@ -13,13 +13,26 @@ export type { AnthropicClientConfig } from './src/clients/anthropic-client';
 export type { OpenRouterClientConfig } from './src/clients/openrouter-client';
 
 // Interface and base types
-export type { LlmClientInterface, BaseLlmClientConfig, BatchProcessOptions } from './src/types/client-interface';
+export type { LlmClientInterface, BaseLlmClientConfig, BatchProcessOptions, StreamChunk } from './src/types/client-interface';
 
 // Model types
 export type { ModelConfig, ProviderModelMap, OpenAIModel, AnthropicModel, OpenRouterModel } from './src/model-types';
 
 // Model configurations
 export { DEFAULT_MODELS, REASONING_EFFORT_MAP, ANTHROPIC_MAX_TOKENS, WEB_SEARCH_TOOLS } from './src/models';
+
+// Error types and utilities
+export {
+  LlmError,
+  LlmTimeoutError,
+  LlmValidationError,
+  LlmApiError,
+  LlmConfigurationError,
+  generateRequestId,
+  isTimeoutError,
+  wrapSdkError,
+} from './src/utils/errors';
+export type { LlmErrorContext } from './src/utils/errors';
 
 // Helper functions
 export {
