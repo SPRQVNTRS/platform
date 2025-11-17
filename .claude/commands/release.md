@@ -1,48 +1,59 @@
 ---
 allowed-tools: Bash(git *), Bash(pnpm *)
-argument-hint: [changeset description (optional)]
-description: Create a changeset, commit, and push changes for release
+description: Analyze changes, create changesets, version, and publish packages
 model: claude-haiku-4-5-20251001
 ---
 
-You are helping to create a release for this monorepo. Follow these steps:
+You are helping to release packages in this monorepo. The user has already committed their changes. Follow these steps:
 
-1. **Check git status** to see what files have changed
+1. **Check what has changed since the last release**:
+   ```bash
+   git log --oneline -10
+   git diff HEAD~1
+   ```
 
-2. **Check git diff** to understand the changes made
+2. **Check for existing changesets**:
+   ```bash
+   ls -la .changeset/*.md 2>/dev/null | grep -v README || echo "No changesets found"
+   ```
 
-3. **Analyze the changes** and determine:
+3. **Analyze the recent commits** to determine:
    - Which packages are affected
-   - What type of change this is (patch/minor/major)
-   - A clear, concise summary of the changes
+   - What type of changes were made (patch/minor/major)
+   - Whether changesets already exist
 
-4. **Create a changeset** by running:
+4. **If no changesets exist**, create them:
+   - Run: `pnpm changeset add`
+   - Select affected package(s)
+   - Choose appropriate version bump
+   - Provide clear summary based on the commits
+   - Commit the changeset: `git add .changeset && git commit -m "chore: add changeset for [describe change]"`
 
+5. **Version the packages**:
    ```bash
-   pnpm changeset add
+   pnpm version-packages
    ```
 
-   When prompted:
-   - Select the affected package(s)
-   - Choose the appropriate version bump (patch/minor/major)
-   - Provide a clear summary: $ARGUMENTS (or generate one based on the diff if no argument provided)
-
-5. **Stage and commit** the changeset:
-
+6. **Review version changes**:
    ```bash
-   git add .changeset
-   git commit -m "chore: add changeset for [describe the change]"
+   git diff
    ```
 
-6. **Push to trigger the release workflow**:
+7. **Commit version changes**:
+   ```bash
+   git add .
+   git commit -m "chore: version packages"
+   ```
 
+8. **Push to trigger CI/CD**:
    ```bash
    git push
    ```
 
-7. **Inform the user** that:
-   - The changeset has been created and pushed
-   - A "Version Packages" PR will be created automatically
-   - Merging that PR will publish the packages to GitHub Packages
+9. **Inform the user**:
+   - Which packages were versioned
+   - What the new versions are
+   - That packages will be published via GitHub Actions
+   - Or they can run `pnpm release` locally if they have proper authentication
 
-If the user provided a description via $ARGUMENTS, use that for the changeset summary. Otherwise, analyze the git diff and create an appropriate summary yourself.
+**Summary**: This command handles the complete release workflow from analyzing changes to pushing versioned packages.
