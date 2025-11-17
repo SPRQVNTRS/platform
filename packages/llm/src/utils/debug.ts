@@ -28,7 +28,7 @@ export class DebugLogger {
   }
 
   /**
-   * Log a debug message
+   * Log a debug message (only in debug mode)
    */
   log(message: string, data?: Record<string, any>): void {
     if (!this.enabled) return;
@@ -38,6 +38,42 @@ export class DebugLogger {
 
     if (data) {
       console.log(JSON.stringify(data, null, 2));
+    }
+  }
+
+  /**
+   * Log an error message (always logs, even in production)
+   */
+  logError(message: string, error?: unknown, data?: Record<string, any>): void {
+    const timestamp = new Date().toISOString();
+    console.error(`[${timestamp}] [${this.clientName}] ERROR: ${message}`);
+
+    if (error) {
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        });
+      } else {
+        console.error('Error details:', error);
+      }
+    }
+
+    if (data) {
+      console.error('Additional context:', JSON.stringify(data, null, 2));
+    }
+  }
+
+  /**
+   * Log a warning message (always logs, even in production)
+   */
+  logWarning(message: string, data?: Record<string, any>): void {
+    const timestamp = new Date().toISOString();
+    console.warn(`[${timestamp}] [${this.clientName}] WARNING: ${message}`);
+
+    if (data) {
+      console.warn(JSON.stringify(data, null, 2));
     }
   }
 
