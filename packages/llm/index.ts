@@ -16,7 +16,7 @@ export type { OpenRouterClientConfig } from './src/clients/openrouter-client';
 export type { LlmClientInterface, BaseLlmClientConfig, BatchProcessOptions } from './src/types/client-interface';
 
 // Model types
-export type { ModelConfig, ProviderModelMap, OpenAIModel, AnthropicModel } from './src/model-types';
+export type { ModelConfig, ProviderModelMap, OpenAIModel, AnthropicModel, OpenRouterModel } from './src/model-types';
 
 // Model configurations
 export { DEFAULT_MODELS, REASONING_EFFORT_MAP, ANTHROPIC_MAX_TOKENS, WEB_SEARCH_TOOLS } from './src/models';
