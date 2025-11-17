@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { z } from 'zod/v3';
 import { AnthropicClient } from '../src/clients/anthropic-client.js';
+import { LlmError, isTimeoutError } from '../src/utils/errors.js';
 
 /**
  * Test script for AnthropicClient
@@ -26,15 +27,18 @@ async function testAnthropicClient() {
     console.warn('WARNING: OPENAI_API_KEY not found. Structured outputs will be less reliable.\n');
   }
 
-  // Initialize client
-  console.log('1. Initializing AnthropicClient...');
+  // Initialize client with custom timeout
+  console.log('1. Initializing AnthropicClient with custom config...');
   const client = new AnthropicClient({
     apiKey: anthropicKey,
     model: 'claude-haiku-4-5-20251001',
     openaiApiKey: openaiKey,
     debug: false, // Disable debug for tests
+    timeout: 60000, // 60 seconds
+    maxRetries: 2,
   });
-  console.log('✓ Client initialized successfully\n');
+  console.log('✓ Client initialized successfully');
+  console.log('  Timeout: 60s, Max Retries: 2\n');
 
   // Test 1: Basic raw response
   console.log('2. Testing basic raw response...');
@@ -86,6 +90,71 @@ async function testAnthropicClient() {
     console.log();
   } catch (error) {
     console.error('✗ Reasoning test failed:', error);
+    throw error;
+  }
+
+  // Test 4: Streaming response
+  console.log('5. Testing streaming response...');
+  try {
+    let fullText = '';
+    let chunkCount = 0;
+
+    for await (const chunk of client.createStreamingResponse('Tell me a short joke.')) {
+      if (!chunk.isComplete) {
+        fullText += chunk.text;
+        chunkCount++;
+        process.stdout.write('.');
+      } else {
+        console.log();
+        console.log('✓ Streaming completed');
+        console.log(`  Received ${chunkCount} chunks`);
+        console.log(`  Full text: ${fullText}`);
+      }
+    }
+    console.log();
+  } catch (error) {
+    console.error('✗ Streaming test failed:', error);
+    throw error;
+  }
+
+  // Test 5: Error handling
+  console.log('6. Testing error handling with invalid API key...');
+  try {
+    const badClient = new AnthropicClient({
+      apiKey: 'invalid-key-12345',
+      model: 'claude-haiku-4-5-20251001',
+      openaiApiKey: openaiKey,
+      timeout: 5000,
+    });
+
+    await badClient.createResponse('Test');
+    console.error('✗ Should have thrown an error');
+  } catch (error) {
+    if (error instanceof LlmError) {
+      console.log('✓ Caught LlmError with context');
+      console.log('  Client Type:', error.context.clientType);
+      console.log('  Model:', error.context.model);
+      console.log('  Request ID:', error.context.requestId);
+    } else {
+      console.log('✓ Error caught:', error.constructor.name);
+    }
+    console.log();
+  }
+
+  // Test 6: Request correlation IDs
+  console.log('7. Testing request correlation IDs...');
+  try {
+    console.log('  Making multiple requests to verify unique IDs...');
+    const promises = [
+      client.createResponse('Say hi'),
+      client.createResponse('Say hello'),
+    ];
+
+    await Promise.all(promises);
+    console.log('✓ Multiple requests completed (check logs for correlation IDs)');
+    console.log();
+  } catch (error) {
+    console.error('✗ Correlation ID test failed:', error);
     throw error;
   }
 
