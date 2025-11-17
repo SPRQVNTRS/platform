@@ -60,17 +60,23 @@ export class OpenRouterClient implements LlmClientInterface {
     this.model = config.model || 'google/gemini-2.5-flash-lite-preview-09-2025';
     this.logger = new DebugLogger('OpenRouterClient', { enabled: config.debug });
 
-    // Initialize formatter client if OpenAI API key is provided
-    if (config.openaiApiKey) {
+    // Auto-detect OpenAI API key from environment if not explicitly provided
+    const openaiKey = config.openaiApiKey || process.env.OPENAI_API_KEY;
+
+    // Initialize formatter client if OpenAI API key is available
+    if (openaiKey) {
       this.formatterClient = new OpenAIClient({
-        apiKey: config.openaiApiKey,
+        apiKey: openaiKey,
         model: DEFAULT_MODELS.STRUCTURED_FORMATTER.model,
         debug: config.debug,
         timeout: this.timeout,
         maxRetries: this.maxRetries,
       });
     } else {
-      this.logger.logWarning('No OpenAI API key provided. Structured responses will attempt direct JSON generation.');
+      this.logger.logWarning(
+        'No OpenAI API key provided. Structured responses will attempt direct JSON generation. ' +
+        'Set OPENAI_API_KEY environment variable for better structured output.'
+      );
     }
 
     // Validate configuration on instantiation
