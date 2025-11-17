@@ -1,5 +1,11 @@
 # @sprqvntrs/llm
 
+## 2.0.1
+
+### Patch Changes
+
+- 49746e0: chore(dependencies): update openai version to ^6.9.0
+
 ## 2.0.0
 
 ### Major Changes
