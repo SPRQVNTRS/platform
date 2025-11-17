@@ -1,5 +1,11 @@
 # @sprqvntrs/llm
 
+## 2.1.0
+
+### Minor Changes
+
+- 28bbdb0: feat(model): add OpenRouter model type for accessing 300+ models across providers
+
 ## 2.0.1
 
 ### Patch Changes
