@@ -30,8 +30,8 @@ importers:
         specifier: ^0.1.3
         version: 0.1.3
       openai:
-        specifier: ^6.1.0
-        version: 6.4.0(zod@4.1.12)
+        specifier: ^6.9.0
+        version: 6.9.0(zod@4.1.12)
       qs:
         specifier: ^6.12.1
         version: 6.14.0
@@ -736,8 +736,8 @@ packages:
     resolution: {integrity: sha512-W67iLl4J2EXEGTbfeHCffrjDfitvLANg0UlX3wFUUSTx92KXRFegMHUVgSqE+wvhAbi4WqjGg9czysTV2Epbew==}
     engines: {node: '>= 0.4'}
 
-  openai@6.4.0:
-    resolution: {integrity: sha512-vSoVBRTPMgg3oSaoHIGfbYM2zwGN0D4F2aiNHMeu1lZHFOwfJMAF0X110HDdedYvcsIo578ujQ11WL5kP687Cw==}
+  openai@6.9.0:
+    resolution: {integrity: sha512-n2sJRYmM+xfJ0l3OfH8eNnIyv3nQY7L08gZQu3dw6wSdfPtKAk92L83M2NIP5SS8Cl/bsBBG3yKzEOjkx0O+7A==}
     hasBin: true
     peerDependencies:
       ws: ^8.18.0
@@ -1730,7 +1730,7 @@ snapshots:
 
   object-inspect@1.13.4: {}
 
-  openai@6.4.0(zod@4.1.12):
+  openai@6.9.0(zod@4.1.12):
     optionalDependencies:
       zod: 4.1.12
 
