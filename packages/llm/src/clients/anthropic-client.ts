@@ -110,10 +110,12 @@ export class AnthropicClient implements LlmClientInterface {
    * Creates a response from Anthropic's API and returns the text content
    *
    * @param prompt The prompt to send to the model
+   * @param options Optional configuration
+   * @param options.timeout Request timeout in milliseconds (overrides client default)
    * @returns The text content as a string
    */
-  async createResponse(prompt: string): Promise<string> {
-    const response = await this.createRawResponse(prompt);
+  async createResponse(prompt: string, options?: { timeout?: number }): Promise<string> {
+    const response = await this.createRawResponse(prompt, options);
     return this.extractContentFromResponse(response);
   }
 
@@ -122,10 +124,23 @@ export class AnthropicClient implements LlmClientInterface {
    * Use this when you need access to metadata like usage stats, finish reason, etc.
    *
    * @param prompt The prompt to send to the model
+   * @param options Optional configuration
+   * @param options.timeout Request timeout in milliseconds (overrides client default)
    * @returns The raw message response from Anthropic
    */
-  async createRawResponse(prompt: string): Promise<unknown> {
-    const response = await this.client.messages.create({
+  async createRawResponse(prompt: string, options?: { timeout?: number }): Promise<unknown> {
+    const effectiveTimeout = options?.timeout ?? this.timeout;
+
+    // Create a client with the effective timeout if different from instance timeout
+    const client = effectiveTimeout !== this.timeout
+      ? new Anthropic({
+          apiKey: this.client.apiKey,
+          timeout: effectiveTimeout,
+          maxRetries: this.maxRetries,
+        })
+      : this.client;
+
+    const response = await client.messages.create({
       model: this.model,
       max_tokens: ANTHROPIC_MAX_TOKENS,
       messages: [
@@ -175,19 +190,32 @@ export class AnthropicClient implements LlmClientInterface {
    * Returns an async iterator that yields chunks of text as they arrive
    *
    * @param prompt The prompt to send to the model
+   * @param options Optional configuration
+   * @param options.timeout Request timeout in milliseconds (overrides client default)
    * @returns An async iterable of stream chunks
    */
-  async *createStreamingResponse(prompt: string): AsyncIterable<StreamChunk> {
+  async *createStreamingResponse(prompt: string, options?: { timeout?: number }): AsyncIterable<StreamChunk> {
     const requestId = generateRequestId();
     const startTime = Date.now();
+    const effectiveTimeout = options?.timeout ?? this.timeout;
 
     this.logger.log('createStreamingResponse called', {
       modelUsed: this.model,
       requestId,
+      timeout: effectiveTimeout,
     });
 
     try {
-      const stream = await this.client.messages.stream({
+      // Create a client with the effective timeout if different from instance timeout
+      const client = effectiveTimeout !== this.timeout
+        ? new Anthropic({
+            apiKey: this.client.apiKey,
+            timeout: effectiveTimeout,
+            maxRetries: this.maxRetries,
+          })
+        : this.client;
+
+      const stream = await client.messages.stream({
         model: this.model,
         max_tokens: ANTHROPIC_MAX_TOKENS,
         messages: [
@@ -228,7 +256,7 @@ export class AnthropicClient implements LlmClientInterface {
         clientType: 'anthropic',
         model: this.model,
         elapsedMs,
-        timeoutMs: this.timeout,
+        timeoutMs: effectiveTimeout,
         operation: 'createStreamingResponse',
         requestId,
         metadata: {
@@ -291,6 +319,7 @@ export class AnthropicClient implements LlmClientInterface {
    * @param options.responseInstructions Additional instructions to append to the prompt (deprecated, use formatGuidance)
    * @param options.useWebSearch Whether to enable web search for this request (default: false)
    * @param options.stream Whether to use streaming for the generation phase (default: true)
+   * @param options.timeout Request timeout in milliseconds (overrides client default)
    * @returns The structured and validated response according to the provided schema
    * @throws Error if no OpenAI formatter is configured
    */
@@ -304,6 +333,7 @@ export class AnthropicClient implements LlmClientInterface {
     responseInstructions,
     useWebSearch = false,
     stream = true,
+    timeout,
   }: {
     prompt: string;
     schema: T;
@@ -314,6 +344,7 @@ export class AnthropicClient implements LlmClientInterface {
     responseInstructions?: string;
     useWebSearch?: boolean;
     stream?: boolean;
+    timeout?: number;
   }): Promise<z.infer<T>> {
     if (!this.formatterClient) {
       throw new Error(
@@ -329,6 +360,7 @@ export class AnthropicClient implements LlmClientInterface {
         : responseInstructions
       : formatGuidance;
 
+    const effectiveTimeout = timeout ?? this.timeout;
     const requestId = generateRequestId();
     const startTime = Date.now();
 
@@ -337,6 +369,7 @@ export class AnthropicClient implements LlmClientInterface {
       reasoningEffort,
       stream,
       requestId,
+      timeout: effectiveTimeout,
     });
 
     try {
@@ -351,6 +384,15 @@ export class AnthropicClient implements LlmClientInterface {
       // Otherwise, use the default ANTHROPIC_MAX_TOKENS
       const maxTokens = thinking ? Math.max(ANTHROPIC_MAX_TOKENS, thinking.budget_tokens + 4096) : ANTHROPIC_MAX_TOKENS;
 
+      // Create a client with the effective timeout if different from instance timeout
+      const client = effectiveTimeout !== this.timeout
+        ? new Anthropic({
+            apiKey: this.client.apiKey,
+            timeout: effectiveTimeout,
+            maxRetries: this.maxRetries,
+          })
+        : this.client;
+
       let textContent: string;
 
       if (stream) {
@@ -359,7 +401,7 @@ export class AnthropicClient implements LlmClientInterface {
         let accumulatedText = '';
         let lastLoggedLength = 0;
 
-        const messageStream = this.client.messages.stream({
+        const messageStream = client.messages.stream({
           model: this.model,
           max_tokens: maxTokens,
           messages: [
@@ -389,7 +431,7 @@ export class AnthropicClient implements LlmClientInterface {
         textContent = accumulatedText;
       } else {
         // Non-streaming path
-        const anthropicResponse = await this.client.messages.create({
+        const anthropicResponse = await client.messages.create({
           model: this.model,
           max_tokens: maxTokens,
           messages: [
@@ -442,7 +484,7 @@ export class AnthropicClient implements LlmClientInterface {
         clientType: 'anthropic',
         model: this.model,
         elapsedMs,
-        timeoutMs: this.timeout,
+        timeoutMs: effectiveTimeout,
         operation: 'createStructuredResponse',
         requestId,
         metadata: {
