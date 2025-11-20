@@ -1,4 +1,3 @@
-import invariant from 'tiny-invariant';
 import { OpenAIClient } from './clients/openai-client';
 import { AnthropicClient } from './clients/anthropic-client';
 import { OpenRouterClient } from './clients/openrouter-client';
@@ -62,7 +61,9 @@ export class LLM {
    */
   private static _createOpenAIClient(model: string, options?: LlmClientOptions): OpenAIClient {
     const apiKey = options?.apiKey ?? process.env.OPENAI_API_KEY;
-    invariant(apiKey, 'OPENAI_API_KEY is not set');
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY is not set');
+    }
     return new OpenAIClient({
       apiKey,
       model,
@@ -75,7 +76,9 @@ export class LLM {
    */
   private static _createAnthropicClient(model: string, options?: LlmClientOptions): AnthropicClient {
     const apiKey = options?.apiKey ?? process.env.ANTHROPIC_API_KEY;
-    invariant(apiKey, 'ANTHROPIC_API_KEY is not set');
+    if (!apiKey) {
+      throw new Error('ANTHROPIC_API_KEY is not set');
+    }
 
     return new AnthropicClient({
       apiKey,
@@ -90,7 +93,9 @@ export class LLM {
    */
   private static _createOpenRouterClient(model: string, options?: LlmClientOptions): OpenRouterClient {
     const apiKey = options?.apiKey ?? process.env.OPENROUTER_API_KEY;
-    invariant(apiKey, 'OPENROUTER_API_KEY is not set');
+    if (!apiKey) {
+      throw new Error('OPENROUTER_API_KEY is not set');
+    }
 
     return new OpenRouterClient({
       apiKey,
