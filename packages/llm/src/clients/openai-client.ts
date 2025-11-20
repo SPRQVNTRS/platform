@@ -68,10 +68,12 @@ export class OpenAIClient implements LlmClientInterface {
    * Uses the responses API which is stateless
    *
    * @param prompt The prompt to send to the model
+   * @param options Optional configuration
+   * @param options.timeout Request timeout in milliseconds (overrides client default)
    * @returns The text content as a string
    */
-  async createResponse(prompt: string): Promise<string> {
-    const response = await this.createRawResponse(prompt);
+  async createResponse(prompt: string, options?: { timeout?: number }): Promise<string> {
+    const response = await this.createRawResponse(prompt, options);
     return this.extractContentFromResponse(response);
   }
 
@@ -80,10 +82,23 @@ export class OpenAIClient implements LlmClientInterface {
    * Use this when you need access to metadata like usage stats, finish reason, etc.
    *
    * @param prompt The prompt to send to the model
+   * @param options Optional configuration
+   * @param options.timeout Request timeout in milliseconds (overrides client default)
    * @returns The raw response from OpenAI
    */
-  async createRawResponse(prompt: string): Promise<unknown> {
-    const response = await this.openai.responses.create({
+  async createRawResponse(prompt: string, options?: { timeout?: number }): Promise<unknown> {
+    const effectiveTimeout = options?.timeout ?? this.timeout;
+
+    // Create a client with the effective timeout if different from instance timeout
+    const client = effectiveTimeout !== this.timeout
+      ? new OpenAI({
+          apiKey: this.openai.apiKey,
+          timeout: effectiveTimeout,
+          maxRetries: this.maxRetries,
+        })
+      : this.openai;
+
+    const response = await client.responses.create({
       input: prompt,
       model: this.model,
     });
@@ -133,19 +148,32 @@ export class OpenAIClient implements LlmClientInterface {
    * Returns an async iterator that yields chunks of text as they arrive
    *
    * @param prompt The prompt to send to the model
+   * @param options Optional configuration
+   * @param options.timeout Request timeout in milliseconds (overrides client default)
    * @returns An async iterable of stream chunks
    */
-  async *createStreamingResponse(prompt: string): AsyncIterable<StreamChunk> {
+  async *createStreamingResponse(prompt: string, options?: { timeout?: number }): AsyncIterable<StreamChunk> {
     const requestId = generateRequestId();
     const startTime = Date.now();
+    const effectiveTimeout = options?.timeout ?? this.timeout;
 
     this.logger.log('createStreamingResponse called', {
       modelUsed: this.model,
       requestId,
+      timeout: effectiveTimeout,
     });
 
     try {
-      const stream = await this.openai.responses.stream({
+      // Create a client with the effective timeout if different from instance timeout
+      const client = effectiveTimeout !== this.timeout
+        ? new OpenAI({
+            apiKey: this.openai.apiKey,
+            timeout: effectiveTimeout,
+            maxRetries: this.maxRetries,
+          })
+        : this.openai;
+
+      const stream = await client.responses.stream({
         model: this.model,
         input: prompt,
       });
@@ -183,7 +211,7 @@ export class OpenAIClient implements LlmClientInterface {
         clientType: 'openai',
         model: this.model,
         elapsedMs,
-        timeoutMs: this.timeout,
+        timeoutMs: effectiveTimeout,
         operation: 'createStreamingResponse',
         requestId,
         metadata: {
@@ -211,6 +239,7 @@ export class OpenAIClient implements LlmClientInterface {
    * @param options.responseInstructions Additional instructions to append to the prompt (deprecated, use formatGuidance)
    * @param options.useWebSearch Whether to enable web search for this request (default: false)
    * @param options.stream Whether to use streaming for the generation phase (default: true)
+   * @param options.timeout Request timeout in milliseconds (overrides client default)
    * @returns The structured and validated response according to the provided schema
    * @throws Error if the response cannot be parsed or if the model refuses to respond
    */
@@ -224,6 +253,7 @@ export class OpenAIClient implements LlmClientInterface {
     responseInstructions,
     useWebSearch = false,
     stream = true,
+    timeout,
   }: {
     prompt: string;
     schema: T;
@@ -234,6 +264,7 @@ export class OpenAIClient implements LlmClientInterface {
     responseInstructions?: string;
     useWebSearch?: boolean;
     stream?: boolean;
+    timeout?: number;
   }): Promise<z.infer<T>> {
     // Handle deprecated responseInstructions parameter
     const effectiveFormatGuidance =
@@ -241,9 +272,19 @@ export class OpenAIClient implements LlmClientInterface {
         (formatGuidance ? `${formatGuidance}\n\n${responseInstructions}` : responseInstructions)
       : formatGuidance;
 
+    const effectiveTimeout = timeout ?? this.timeout;
     const requestId = generateRequestId();
     let attempts = 0;
     let lastError: unknown;
+
+    // Create a client with the effective timeout if different from instance timeout
+    const client = effectiveTimeout !== this.timeout
+      ? new OpenAI({
+          apiKey: this.openai.apiKey,
+          timeout: effectiveTimeout,
+          maxRetries: this.maxRetries,
+        })
+      : this.openai;
 
     while (attempts < maxAttempts) {
       attempts++;
@@ -258,6 +299,7 @@ export class OpenAIClient implements LlmClientInterface {
           attempt: `${attempts}/${maxAttempts}`,
           stream,
           requestId,
+          timeout: effectiveTimeout,
         });
 
         // Create text format using zodTextFormat
@@ -275,7 +317,7 @@ export class OpenAIClient implements LlmClientInterface {
           let lastLoggedLength = 0;
 
           // Stream the response with structured output format
-          const streamResponse = this.openai.responses.stream({
+          const streamResponse = client.responses.stream({
             model: this.model,
             ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }),
             instructions:
@@ -313,7 +355,7 @@ export class OpenAIClient implements LlmClientInterface {
           }
         } else {
           // Non-streaming path using responses.parse API
-          const response = await this.openai.responses.parse({
+          const response = await client.responses.parse({
             model: this.model,
             ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }),
             instructions:
@@ -352,7 +394,7 @@ export class OpenAIClient implements LlmClientInterface {
           clientType: 'openai',
           model: this.model,
           elapsedMs,
-          timeoutMs: this.timeout,
+          timeoutMs: effectiveTimeout,
           operation: 'createStructuredResponse',
           requestId,
           metadata: {

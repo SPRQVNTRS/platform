@@ -4,40 +4,37 @@ import { OpenRouterClient } from '../src/clients/openrouter-client.js';
 import { LlmError, LlmTimeoutError, isTimeoutError } from '../src/utils/errors.js';
 
 /**
- * Test script for OpenRouterClient
+ * Test script for OpenRouterClient with Native Structured Outputs
  *
  * Run with: pnpm tsx tests/openrouter-client.test.ts
  *
  * Requirements:
  * - OPENROUTER_API_KEY in .env file
- * - OPENAI_API_KEY in .env file (optional, for better structured output formatting)
+ *
+ * This test suite validates OpenRouter's native structured outputs feature
+ * using Zod schema to JSON Schema conversion.
  */
 
 async function testOpenRouterClient() {
-  console.log('=== Testing OpenRouterClient ===\n');
+  console.log('=== Testing OpenRouterClient with Native Structured Outputs ===\n');
 
   const openrouterKey = process.env.OPENROUTER_API_KEY;
-  const openaiKey = process.env.OPENAI_API_KEY;
 
   if (!openrouterKey) {
     throw new Error('OPENROUTER_API_KEY not found in environment variables');
-  }
-
-  if (!openaiKey) {
-    console.warn('WARNING: OPENAI_API_KEY not found. Structured outputs will use direct JSON parsing.\n');
   }
 
   // Initialize client with custom timeout
   console.log('1. Initializing OpenRouterClient with custom config...');
   const client = new OpenRouterClient({
     apiKey: openrouterKey,
-    model: 'openai/gpt-5-mini',
+    model: 'openai/gpt-4o-mini', // Use a model that supports structured outputs
     debug: false, // Disable debug for tests
-    openaiApiKey: openaiKey,
     timeout: 60000, // 60 seconds
     maxRetries: 2,
   });
   console.log('✓ Client initialized successfully');
+  console.log('  Model: openai/gpt-4o-mini (supports native structured outputs)');
   console.log('  Timeout: 60s, Max Retries: 2');
   console.log('  Note: OpenRouter SDK handles retries internally\n');
 
@@ -54,8 +51,8 @@ async function testOpenRouterClient() {
     throw error;
   }
 
-  // Test 2: Basic structured response
-  console.log('3. Testing basic structured response...');
+  // Test 2: Basic structured response with native structured outputs
+  console.log('3. Testing basic structured response (native structured outputs)...');
   const schema = z.object({
     answer: z.string(),
     confidence: z.number().min(0).max(1),
@@ -70,6 +67,16 @@ async function testOpenRouterClient() {
     });
 
     console.log('✓ Response:', result);
+    console.log('  Validating response structure...');
+
+    if (typeof result.answer !== 'string') {
+      throw new Error('Invalid answer type');
+    }
+    if (typeof result.confidence !== 'number' || result.confidence < 0 || result.confidence > 1) {
+      throw new Error('Invalid confidence value');
+    }
+
+    console.log('  ✓ Response structure is valid');
     console.log();
   } catch (error) {
     console.error('✗ Test failed:', error);
@@ -124,7 +131,7 @@ async function testOpenRouterClient() {
   try {
     const badClient = new OpenRouterClient({
       apiKey: 'invalid-key-12345',
-      model: 'openai/gpt-5-mini',
+      model: 'openai/gpt-4o-mini',
       timeout: 5000,
     });
 
@@ -149,7 +156,7 @@ async function testOpenRouterClient() {
   try {
     const timeoutClient = new OpenRouterClient({
       apiKey: openrouterKey,
-      model: 'openai/gpt-5-mini',
+      model: 'openai/gpt-4o-mini',
       timeout: 1, // 1ms - will timeout
       maxRetries: 0,
     });
@@ -168,14 +175,13 @@ async function testOpenRouterClient() {
     console.log();
   }
 
-  // Test 7: Verify streaming is used by default in structured responses
-  console.log('8. Testing streaming in createStructuredResponse (default behavior)...');
+  // Test 7: Verify streaming is used by default in structured responses with native outputs
+  console.log('8. Testing streaming in createStructuredResponse with native structured outputs...');
   try {
     // Create client with debug enabled to see streaming logs
     const debugClient = new OpenRouterClient({
       apiKey: openrouterKey,
-      model: 'openai/gpt-5-mini',
-      openaiApiKey: openaiKey,
+      model: 'openai/gpt-4o-mini',
       debug: true,
       timeout: 60000,
       maxRetries: 2,
@@ -186,12 +192,12 @@ async function testOpenRouterClient() {
       schema: z.object({
         answer: z.number(),
       }),
-      // Note: stream defaults to true now
+      // Note: stream defaults to true now, using native structured outputs
     });
 
-    console.log('✓ Structured response with default streaming succeeded');
+    console.log('✓ Structured response with streaming and native outputs succeeded');
     console.log('  Result:', streamResult);
-    console.log('  (Check logs above for "Using streaming generation for observability")');
+    console.log('  (Check logs above for "Using streaming generation with native structured outputs")');
     console.log();
   } catch (error) {
     console.error('✗ Streaming test failed:', error);
@@ -218,7 +224,119 @@ async function testOpenRouterClient() {
     throw error;
   }
 
-  console.log('=== All OpenRouterClient tests passed! ===');
+  // Test 9: Complex nested schema validation
+  console.log('10. Testing complex nested schema with native structured outputs...');
+  try {
+    const complexSchema = z.object({
+      user: z.object({
+        name: z.string(),
+        age: z.number(),
+        email: z.string().email(),
+      }),
+      tags: z.array(z.string()),
+      metadata: z.object({
+        createdAt: z.string(),
+        isActive: z.boolean(),
+      }),
+    });
+
+    const complexResult = await client.createStructuredResponse({
+      prompt: 'Create a sample user profile with name John Doe, age 30, email john@example.com, tags ["developer", "typescript"], created today, and active status true.',
+      schema: complexSchema,
+      logExecutionTime: true,
+    });
+
+    console.log('✓ Complex nested schema response:', JSON.stringify(complexResult, null, 2));
+    console.log('  Validating nested structure...');
+
+    if (!complexResult.user || typeof complexResult.user.name !== 'string') {
+      throw new Error('Invalid user.name');
+    }
+    if (!Array.isArray(complexResult.tags)) {
+      throw new Error('Invalid tags array');
+    }
+    if (typeof complexResult.metadata.isActive !== 'boolean') {
+      throw new Error('Invalid metadata.isActive');
+    }
+
+    console.log('  ✓ Complex nested structure is valid');
+    console.log();
+  } catch (error) {
+    console.error('✗ Complex schema test failed:', error);
+    throw error;
+  }
+
+  // Test 10: Non-streaming mode with native structured outputs
+  console.log('11. Testing non-streaming mode with native structured outputs...');
+  try {
+    const nonStreamResult = await client.createStructuredResponse({
+      prompt: 'What is 10 + 5?',
+      schema: z.object({
+        result: z.number(),
+      }),
+      stream: false, // Explicitly disable streaming
+      logExecutionTime: true,
+    });
+
+    console.log('✓ Non-streaming response:', nonStreamResult);
+    console.log();
+  } catch (error) {
+    console.error('✗ Non-streaming test failed:', error);
+    throw error;
+  }
+
+  // Test 11: Per-method timeout override
+  console.log('12. Testing per-method timeout override...');
+  try {
+    // Client has 60s timeout, but we override to 30s for this call
+    const timeoutResult = await client.createStructuredResponse({
+      prompt: 'What is 3 + 3?',
+      schema: z.object({
+        sum: z.number(),
+      }),
+      timeout: 30000, // Override to 30 seconds
+      logExecutionTime: true,
+    });
+
+    console.log('✓ Per-method timeout override successful');
+    console.log('  Result:', timeoutResult);
+    console.log('  (Used 30s timeout instead of client default 60s)');
+    console.log();
+  } catch (error) {
+    console.error('✗ Per-method timeout override test failed:', error);
+    throw error;
+  }
+
+  // Test 12: Per-method timeout with createResponse
+  console.log('13. Testing per-method timeout with createResponse...');
+  try {
+    const response = await client.createResponse('Say hello', { timeout: 15000 });
+    console.log('✓ createResponse with timeout override successful');
+    console.log('  Response:', response);
+    console.log();
+  } catch (error) {
+    console.error('✗ createResponse timeout test failed:', error);
+    throw error;
+  }
+
+  // Test 13: Per-method timeout with createStreamingResponse
+  console.log('14. Testing per-method timeout with createStreamingResponse...');
+  try {
+    let streamText = '';
+    for await (const chunk of client.createStreamingResponse('Count 1, 2', { timeout: 20000 })) {
+      if (!chunk.isComplete) {
+        streamText += chunk.text;
+      }
+    }
+    console.log('✓ createStreamingResponse with timeout override successful');
+    console.log('  Streamed text:', streamText);
+    console.log();
+  } catch (error) {
+    console.error('✗ createStreamingResponse timeout test failed:', error);
+    throw error;
+  }
+
+  console.log('=== All OpenRouterClient tests with native structured outputs passed! ===');
 }
 
 // Run tests

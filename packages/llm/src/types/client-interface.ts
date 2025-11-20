@@ -103,27 +103,33 @@ export interface LlmClientInterface {
    * This is a simple, stateless method that extracts text automatically
    *
    * @param prompt The prompt to send to the model
+   * @param options Optional configuration
+   * @param options.timeout Request timeout in milliseconds (overrides client default)
    * @returns The text content as a string
    */
-  createResponse(prompt: string): Promise<string>;
+  createResponse(prompt: string, options?: { timeout?: number }): Promise<string>;
 
   /**
    * Creates a raw response from the provider's API and returns the full response object
    * Use this when you need access to metadata like usage stats, finish reason, etc.
    *
    * @param prompt The prompt to send to the model
+   * @param options Optional configuration
+   * @param options.timeout Request timeout in milliseconds (overrides client default)
    * @returns The raw response object from the provider
    */
-  createRawResponse(prompt: string): Promise<unknown>;
+  createRawResponse(prompt: string, options?: { timeout?: number }): Promise<unknown>;
 
   /**
    * Creates a streaming response from the provider's API
    * Returns an async iterator that yields chunks of text as they arrive
    *
    * @param prompt The prompt to send to the model
+   * @param options Optional configuration
+   * @param options.timeout Request timeout in milliseconds (overrides client default)
    * @returns An async iterable of stream chunks
    */
-  createStreamingResponse(prompt: string): AsyncIterable<StreamChunk>;
+  createStreamingResponse(prompt: string, options?: { timeout?: number }): AsyncIterable<StreamChunk>;
 
   /**
    * Creates a structured response using the provider's API with Zod schema validation
@@ -138,6 +144,7 @@ export interface LlmClientInterface {
    * @param options.responseInstructions Additional instructions to append to the prompt (deprecated, use formatGuidance)
    * @param options.useWebSearch Whether to enable web search for this request (default: false)
    * @param options.stream Whether to use streaming for the generation phase (default: true)
+   * @param options.timeout Request timeout in milliseconds (overrides client default)
    */
   createStructuredResponse<T extends z.ZodType>(options: {
     prompt: string;
@@ -149,6 +156,7 @@ export interface LlmClientInterface {
     responseInstructions?: string;
     useWebSearch?: boolean;
     stream?: boolean;
+    timeout?: number;
   }): Promise<z.infer<T>>;
 
   /**
