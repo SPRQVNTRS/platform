@@ -1,6 +1,6 @@
 {
   "name": "@sprqvntrs/image-postgres",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "PostgreSQL 17 with pgvector and pg_cron extensions",
   "scripts": {
