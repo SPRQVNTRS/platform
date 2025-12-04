@@ -9,7 +9,9 @@
     "version:bump:all": "pnpm --filter \"./apps/*\" --parallel run version:bump",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "pnpm publish -r --no-git-checks"
+    "release": "pnpm publish -r --no-git-checks",
+    "docker:build": "pnpm --filter \"@sprqvntrs/image-*\" run build",
+    "docker:push": "pnpm --filter \"@sprqvntrs/image-*\" run push"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",
