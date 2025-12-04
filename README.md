@@ -1,12 +1,22 @@
-# SPRQVNTRS Packages
+# SPRQVNTRS Platform
 
-Private monorepo for `@sprqvntrs` scoped packages published to GitHub Packages.
+Private monorepo for `@sprqvntrs` scoped packages and container images.
 
-## 📦 Available Packages
+## Packages
 
-- **[@sprqvntrs/llm](packages/llm)** - LLM integration utilities
+| Package | Description | README |
+|---------|-------------|--------|
+| [@sprqvntrs/llm](https://github.com/SPRQVNTRS/platform/pkgs/npm/llm) | Unified LLM client for OpenAI & Anthropic | [packages/llm](packages/llm/README.md) |
 
-## 🛠️ Development Workflow
+## Container Images
+
+| Image | Description | README |
+|-------|-------------|--------|
+| [ghcr.io/sprqvntrs/postgres](https://github.com/SPRQVNTRS/platform/pkgs/container/postgres) | PostgreSQL 17 with pgvector & pg_cron | [images/postgres](images/postgres/README.md) |
+
+---
+
+## Development Workflow
 
 ### Making Changes
 
@@ -52,7 +62,7 @@ git push
 
 **Version types:** patch (0.0.X) | minor (0.X.0) | major (X.0.0)
 
-## 📥 Consuming Packages
+## Consuming Packages
 
 ### 1. Create Token
 
@@ -105,7 +115,7 @@ Packages are TypeScript source files. Configure your bundler to transpile `node_
 }
 ```
 
-## 📦 Adding Packages
+## Adding Packages
 
 ```bash
 mkdir -p packages/your-package
@@ -130,7 +140,7 @@ mkdir -p packages/your-package
 }
 ```
 
-## 🔐 Security
+## Security
 
 **Never commit:** PATs, `.npmrc` with hardcoded tokens, `.env` files with secrets
 
@@ -142,7 +152,7 @@ mkdir -p packages/your-package
 
 **If token leaked:** Revoke at https://github.com/settings/tokens, remove from git history, regenerate
 
-## 🛠️ Development Commands
+## Development Commands
 
 ```bash
 pnpm install    # Install dependencies
@@ -154,10 +164,10 @@ pnpm clean      # Clean workspace
 
 ```
 platform/
-├── packages/           # Published packages
+├── packages/           # npm packages
 │   └── llm/           # @sprqvntrs/llm
+├── images/            # Container images
+│   └── postgres/      # PostgreSQL with pgvector & pg_cron
 ├── .changeset/        # Changeset files (created by /release)
-└── .claude/           # Claude Code configuration
-    └── commands/
-        └── release.md # /release command
+└── .github/workflows/ # CI/CD pipelines
 ```
