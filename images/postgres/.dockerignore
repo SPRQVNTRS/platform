@@ -1,0 +1,23 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+CHANGELOG.md
+
+# Node artifacts (from workspace)
+node_modules
+package-lock.json
+pnpm-lock.yaml
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Sample/backup configs
+*.sample.default

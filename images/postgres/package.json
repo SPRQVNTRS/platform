@@ -1,0 +1,15 @@
+{
+  "name": "@sprqvntrs/image-postgres",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PostgreSQL 17 with pgvector and pg_cron extensions",
+  "scripts": {
+    "build": "docker build -t ghcr.io/sprqvntrs/postgres:$npm_package_version -t ghcr.io/sprqvntrs/postgres:latest -f Dockerfile .",
+    "push": "docker push ghcr.io/sprqvntrs/postgres:$npm_package_version && docker push ghcr.io/sprqvntrs/postgres:latest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SPRQVNTRS/platform.git",
+    "directory": "images/postgres"
+  }
+}
