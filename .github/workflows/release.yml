@@ -71,6 +71,8 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Check for image changes
         id: changes
