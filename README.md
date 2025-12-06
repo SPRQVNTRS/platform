@@ -4,14 +4,14 @@ Private monorepo for `@sprqvntrs` scoped packages and container images.
 
 ## Packages
 
-| Package | Description | README |
-|---------|-------------|--------|
+| Package                                                              | Description                               | README                                 |
+| -------------------------------------------------------------------- | ----------------------------------------- | -------------------------------------- |
 | [@sprqvntrs/llm](https://github.com/SPRQVNTRS/platform/pkgs/npm/llm) | Unified LLM client for OpenAI & Anthropic | [packages/llm](packages/llm/README.md) |
 
 ## Container Images
 
-| Image | Description | README |
-|-------|-------------|--------|
+| Image                                                                                       | Description                           | README                                       |
+| ------------------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------- |
 | [ghcr.io/sprqvntrs/postgres](https://github.com/SPRQVNTRS/platform/pkgs/container/postgres) | PostgreSQL 17 with pgvector & pg_cron | [images/postgres](images/postgres/README.md) |
 
 ---
@@ -71,6 +71,7 @@ git push
 ### 2. Configure Authentication
 
 **Project `.npmrc` (recommended, safe to commit):**
+
 ```
 @sprqvntrs:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=${GH_PACKAGES_TOKEN}
@@ -79,6 +80,7 @@ git push
 Then set in shell: `export GH_PACKAGES_TOKEN=ghp_xxx`
 
 **Or user `~/.npmrc` (not committed):**
+
 ```
 @sprqvntrs:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=ghp_xxx
@@ -98,7 +100,7 @@ pnpm add @sprqvntrs/llm
     registry-url: 'https://npm.pkg.github.com'
 - run: npm install
   env:
-    NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Same repo
+    NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Same repo
     # NODE_AUTH_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}  # Cross-repo
 ```
 
@@ -140,6 +142,12 @@ mkdir -p packages/your-package
 }
 ```
 
+## Downloading/pulling containers
+
+- Add a Github Classic Token with `read:packages` permissions
+- On your machine run `docker login ghcr.io` use your github username as login and the GH token as password
+- these are stored in bitwarden
+
 ## Security
 
 **Never commit:** PATs, `.npmrc` with hardcoded tokens, `.env` files with secrets
@@ -147,6 +155,7 @@ mkdir -p packages/your-package
 **Safe to commit:** `.npmrc` with `${ENV_VARIABLE}` placeholders
 
 **Token scopes:**
+
 - Install: `read:packages`
 - Publish: `write:packages`, `repo`
 
