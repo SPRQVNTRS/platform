@@ -1,0 +1,48 @@
+{
+  "name": "@sprqvntrs/logger",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./http": "./src/middleware/http.ts",
+    "./server": "./src/presets/server.ts",
+    "./testing": "./src/testing/mock-logger.ts"
+  },
+  "license": "proprietary",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SPRQVNTRS/platform.git",
+    "directory": "packages/logger"
+  },
+  "files": [
+    "src/**/*",
+    "index.ts"
+  ],
+  "scripts": {
+    "test": "tsx src/testing/mock-logger.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pino": "^9.6.0",
+    "pino-http": "^10.4.0"
+  },
+  "peerDependencies": {
+    "pino-pretty": "^13.0.0"
+  },
+  "peerDependenciesMeta": {
+    "pino-pretty": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "pino-pretty": "^13.0.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.6.0"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
+}
