@@ -4,9 +4,10 @@ Private monorepo for `@sprqvntrs` scoped packages and container images.
 
 ## Packages
 
-| Package                                                              | Description                               | README                                 |
-| -------------------------------------------------------------------- | ----------------------------------------- | -------------------------------------- |
-| [@sprqvntrs/llm](https://github.com/SPRQVNTRS/platform/pkgs/npm/llm) | Unified LLM client for OpenAI & Anthropic | [packages/llm](packages/llm/README.md) |
+| Package                                                                    | Description                               | README                                       |
+| -------------------------------------------------------------------------- | ----------------------------------------- | -------------------------------------------- |
+| [@sprqvntrs/llm](https://github.com/SPRQVNTRS/platform/pkgs/npm/llm)       | Unified LLM client for OpenAI & Anthropic | [packages/llm](packages/llm/README.md)       |
+| [@sprqvntrs/logger](https://github.com/SPRQVNTRS/platform/pkgs/npm/logger) | Structured logging with Pino              | [packages/logger](packages/logger/README.md) |
 
 ## Container Images
 
@@ -174,7 +175,8 @@ pnpm clean      # Clean workspace
 ```
 platform/
 ├── packages/           # npm packages
-│   └── llm/           # @sprqvntrs/llm
+│   ├── llm/           # @sprqvntrs/llm
+│   └── logger/        # @sprqvntrs/logger
 ├── images/            # Container images
 │   └── postgres/      # PostgreSQL with pgvector & pg_cron
 ├── .changeset/        # Changeset files (created by /release)
