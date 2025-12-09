@@ -1,6 +1,7 @@
 import { OpenRouter } from '@openrouter/sdk';
 import { z } from 'zod/v3';
 import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk } from '../types/client-interface';
+import { DEFAULT_SYSTEM_PROMPT } from '../models';
 import { DebugLogger } from '../utils/debug';
 import {
   generateRequestId,
@@ -151,7 +152,10 @@ export class OpenRouterClient implements LlmClientInterface {
 
     const response = await client.chat.send({
       model: this.model,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [
+        { role: 'system', content: DEFAULT_SYSTEM_PROMPT },
+        { role: 'user', content: prompt },
+      ],
       stream: false,
     });
 
@@ -197,6 +201,7 @@ export class OpenRouterClient implements LlmClientInterface {
    * @param prompt The prompt to send to the model
    * @param responseFormat Optional structured output format configuration
    * @param timeout Optional timeout in milliseconds
+   * @param systemPrompt Optional custom system prompt (defaults to DEFAULT_SYSTEM_PROMPT)
    * @returns An async iterable of stream chunks
    */
   private async *createStreamingResponseInternal(
@@ -210,7 +215,8 @@ export class OpenRouterClient implements LlmClientInterface {
         description?: string;
       };
     },
-    timeout?: number
+    timeout?: number,
+    systemPrompt: string = DEFAULT_SYSTEM_PROMPT
   ): AsyncIterable<StreamChunk> {
     const effectiveTimeout = timeout ?? this.timeout;
     const requestId = generateRequestId();
@@ -234,7 +240,10 @@ export class OpenRouterClient implements LlmClientInterface {
 
       const stream = await client.chat.send({
         model: this.model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: prompt },
+        ],
         stream: true,
         ...(responseFormat && { responseFormat }),
       });
@@ -372,12 +381,11 @@ export class OpenRouterClient implements LlmClientInterface {
           ),
         };
 
-        // Build the full prompt with system instructions
-        const systemInstructions =
-          'You are an expert assistant. Respond with valid JSON data matching the provided schema. ' +
-          (effectiveFormatGuidance ? `\n${effectiveFormatGuidance}` : '');
-
-        const fullPrompt = `${systemInstructions}\n\nUser request: ${prompt}`;
+        // Build the system prompt with instructions
+        const systemPrompt =
+          DEFAULT_SYSTEM_PROMPT +
+          '\n\nRespond with valid JSON data matching the provided schema.' +
+          (effectiveFormatGuidance ? `\n\n${effectiveFormatGuidance}` : '');
 
         let contentString: string;
 
@@ -387,7 +395,7 @@ export class OpenRouterClient implements LlmClientInterface {
           let accumulatedText = '';
           let lastLoggedLength = 0;
 
-          for await (const chunk of this.createStreamingResponseInternal(fullPrompt, responseFormat, effectiveTimeout)) {
+          for await (const chunk of this.createStreamingResponseInternal(prompt, responseFormat, effectiveTimeout, systemPrompt)) {
             if (!chunk.isComplete) {
               accumulatedText += chunk.text;
 
@@ -405,7 +413,10 @@ export class OpenRouterClient implements LlmClientInterface {
           // Non-streaming path with structured outputs
           const response = await client.chat.send({
             model: this.model,
-            messages: [{ role: 'user', content: fullPrompt }],
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: prompt },
+            ],
             stream: false,
             responseFormat,
           });
