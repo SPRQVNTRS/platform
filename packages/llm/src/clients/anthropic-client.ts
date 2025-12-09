@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod/v3';
 import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk } from '../types/client-interface';
-import { DEFAULT_MODELS, ANTHROPIC_MAX_TOKENS, WEB_SEARCH_TOOLS } from '../models';
+import { DEFAULT_MODELS, ANTHROPIC_MAX_TOKENS, WEB_SEARCH_TOOLS, DEFAULT_SYSTEM_PROMPT } from '../models';
 import { OpenAIClient } from './openai-client';
 import { AnthropicModel } from '../model-types';
 import { DebugLogger } from '../utils/debug';
@@ -143,6 +143,7 @@ export class AnthropicClient implements LlmClientInterface {
     const response = await client.messages.create({
       model: this.model,
       max_tokens: ANTHROPIC_MAX_TOKENS,
+      system: DEFAULT_SYSTEM_PROMPT,
       messages: [
         {
           role: 'user',
@@ -218,6 +219,7 @@ export class AnthropicClient implements LlmClientInterface {
       const stream = await client.messages.stream({
         model: this.model,
         max_tokens: ANTHROPIC_MAX_TOKENS,
+        system: DEFAULT_SYSTEM_PROMPT,
         messages: [
           {
             role: 'user',
@@ -404,6 +406,7 @@ export class AnthropicClient implements LlmClientInterface {
         const messageStream = client.messages.stream({
           model: this.model,
           max_tokens: maxTokens,
+          system: DEFAULT_SYSTEM_PROMPT,
           messages: [
             {
               role: 'user',
@@ -434,6 +437,7 @@ export class AnthropicClient implements LlmClientInterface {
         const anthropicResponse = await client.messages.create({
           model: this.model,
           max_tokens: maxTokens,
+          system: DEFAULT_SYSTEM_PROMPT,
           messages: [
             {
               role: 'user',

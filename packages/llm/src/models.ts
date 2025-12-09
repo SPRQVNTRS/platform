@@ -59,6 +59,18 @@ export const REASONING_EFFORT_MAP = {
 export const ANTHROPIC_MAX_TOKENS = 4096;
 
 /**
+ * Default system prompt used across all LLM clients
+ * Instructs the model to generate content directly without asking clarifying questions
+ */
+export const DEFAULT_SYSTEM_PROMPT = `You are an expert assistant.
+
+When given a task, produce the requested output directly:
+- Do NOT ask clarifying questions
+- Do NOT present multiple options or menus for the user to choose from
+- Do NOT include meta-commentary about the task
+- Make reasonable assumptions when details are unspecified`;
+
+/**
  * Web search tool configurations for different providers
  */
 export const WEB_SEARCH_TOOLS = {

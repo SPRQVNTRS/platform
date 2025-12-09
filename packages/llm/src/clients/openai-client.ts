@@ -2,7 +2,7 @@ import { OpenAI } from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import { z } from 'zod/v3';
 import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk } from '../types/client-interface';
-import { DEFAULT_MODELS, WEB_SEARCH_TOOLS } from '../models';
+import { DEFAULT_MODELS, WEB_SEARCH_TOOLS, DEFAULT_SYSTEM_PROMPT } from '../models';
 import { DebugLogger } from '../utils/debug';
 import {
   generateRequestId,
@@ -321,8 +321,9 @@ export class OpenAIClient implements LlmClientInterface {
             model: this.model,
             ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }),
             instructions:
-              'You are an expert assistant. Respond with valid data matching the provided schema. ' +
-              (effectiveFormatGuidance ? `\n${effectiveFormatGuidance}` : ''),
+              DEFAULT_SYSTEM_PROMPT +
+              '\n\nRespond with valid data matching the provided schema.' +
+              (effectiveFormatGuidance ? `\n\n${effectiveFormatGuidance}` : ''),
             input: prompt,
             text: {
               format: textFormat,
@@ -359,8 +360,9 @@ export class OpenAIClient implements LlmClientInterface {
             model: this.model,
             ...(reasoningEffort && { reasoning: { effort: reasoningEffort } }),
             instructions:
-              'You are an expert assistant. Respond with valid data matching the provided schema. ' +
-              (effectiveFormatGuidance ? `\n${effectiveFormatGuidance}` : ''),
+              DEFAULT_SYSTEM_PROMPT +
+              '\n\nRespond with valid data matching the provided schema.' +
+              (effectiveFormatGuidance ? `\n\n${effectiveFormatGuidance}` : ''),
             input: prompt,
             text: {
               format: textFormat,
