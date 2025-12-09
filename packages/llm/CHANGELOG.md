@@ -1,5 +1,11 @@
 # @sprqvntrs/llm
 
+## 3.2.0
+
+### Minor Changes
+
+- 2dc7b28: Add consistent DEFAULT_SYSTEM_PROMPT across all LLM clients (Anthropic, OpenAI, OpenRouter) to ensure uniform behavior that generates content directly without asking clarifying questions
+
 ## 3.1.1
 
 ### Patch Changes
