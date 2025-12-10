@@ -22,7 +22,8 @@
     "index.ts"
   ],
   "scripts": {
-    "test": "tsx src/testing/workflow.test.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -38,7 +39,8 @@
     "drizzle-orm": "^0.39.0",
     "postgres": "^3.4.0",
     "tsx": "^4.20.6",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.4"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
