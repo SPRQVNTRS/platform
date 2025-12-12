@@ -91,6 +91,13 @@ export interface DeleteWorkflowJobsResult {
 }
 
 /**
+ * Result of deleting or cancelling pending jobs.
+ */
+export interface PendingJobsResult {
+  count: number;
+}
+
+/**
  * pg-boss query interface.
  */
 export interface PgBossQueries {
@@ -127,6 +134,32 @@ export interface PgBossQueries {
    * @param workflowId - Workflow ID to cancel/delete jobs for
    */
   deleteWorkflowJobs: (workflowId: string) => Promise<DeleteWorkflowJobsResult>;
+
+  /**
+   * Deletes all pending jobs (state = 'created').
+   * Optionally filter by queue name.
+   *
+   * @param queueName - Optional queue name to filter by
+   */
+  deletePendingJobs: (queueName?: string) => Promise<PendingJobsResult>;
+
+  /**
+   * Cancels all pending jobs (state = 'created') by setting state to 'cancelled'.
+   * Jobs remain in the database but won't be processed.
+   * Optionally filter by queue name.
+   *
+   * @param queueName - Optional queue name to filter by
+   */
+  cancelPendingJobs: (queueName?: string) => Promise<PendingJobsResult>;
+
+  /**
+   * Purges all jobs in a specific state.
+   * WARNING: This permanently deletes jobs.
+   *
+   * @param state - Job state to purge
+   * @param queueName - Optional queue name to filter by
+   */
+  purgeJobsByState: (state: PgBossJobState, queueName?: string) => Promise<PendingJobsResult>;
 }
 
 /**
@@ -255,6 +288,33 @@ export function createPgBossQueries(
         cancelledCount: cancelResult.rowCount ?? 0,
         deletedCount: deleteResult.rowCount ?? 0,
       };
+    },
+
+    async deletePendingJobs(queueName?: string): Promise<PendingJobsResult> {
+      const query = queueName
+        ? `DELETE FROM ${schema}.job WHERE state = 'created' AND name = $1 RETURNING id`
+        : `DELETE FROM ${schema}.job WHERE state = 'created' RETURNING id`;
+
+      const result = await pool.query(query, queueName ? [queueName] : []);
+      return { count: result.rowCount ?? 0 };
+    },
+
+    async cancelPendingJobs(queueName?: string): Promise<PendingJobsResult> {
+      const query = queueName
+        ? `UPDATE ${schema}.job SET state = 'cancelled' WHERE state = 'created' AND name = $1 RETURNING id`
+        : `UPDATE ${schema}.job SET state = 'cancelled' WHERE state = 'created' RETURNING id`;
+
+      const result = await pool.query(query, queueName ? [queueName] : []);
+      return { count: result.rowCount ?? 0 };
+    },
+
+    async purgeJobsByState(state: PgBossJobState, queueName?: string): Promise<PendingJobsResult> {
+      const query = queueName
+        ? `DELETE FROM ${schema}.job WHERE state = $1 AND name = $2 RETURNING id`
+        : `DELETE FROM ${schema}.job WHERE state = $1 RETURNING id`;
+
+      const result = await pool.query(query, queueName ? [state, queueName] : [state]);
+      return { count: result.rowCount ?? 0 };
     },
   };
 }

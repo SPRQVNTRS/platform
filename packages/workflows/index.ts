@@ -209,6 +209,7 @@ export {
   type PgBossScheduleItem,
   type PgBossArchiveItem,
   type DeleteWorkflowJobsResult,
+  type PendingJobsResult,
 } from './src/infrastructure/pgboss-queries';
 
 // =============================================================================
