@@ -242,14 +242,25 @@ export function createSendOptions(
 ): PgBoss.SendOptions {
   const fullConfig = getQueueConfig(config);
 
-  return {
+  const baseOptions: PgBoss.SendOptions = {
     retryLimit: fullConfig.retryLimit,
     retryDelay: fullConfig.retryDelay,
     retryBackoff: fullConfig.retryBackoff,
     expireInSeconds: fullConfig.expireInSeconds,
     retentionSeconds: fullConfig.retentionSeconds,
-    ...overrides,
   };
+
+  // Filter out undefined values from overrides to prevent pg-boss validation errors
+  // (e.g., "priority must be an integer" when priority is undefined)
+  if (overrides) {
+    for (const [key, value] of Object.entries(overrides)) {
+      if (value !== undefined) {
+        (baseOptions as Record<string, unknown>)[key] = value;
+      }
+    }
+  }
+
+  return baseOptions;
 }
 
 /**
