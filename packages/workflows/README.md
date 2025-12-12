@@ -23,7 +23,7 @@ pnpm add @sprqvntrs/workflows
 ### Peer Dependencies
 
 ```bash
-pnpm add drizzle-orm postgres
+pnpm add drizzle-orm pg
 ```
 
 ## Quick Start
@@ -32,12 +32,12 @@ pnpm add drizzle-orm postgres
 
 ```typescript
 import { createWorkflowOrchestrator } from '@sprqvntrs/workflows';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 
 // Create database connection
-const client = postgres(process.env.DATABASE_URL!);
-const db = drizzle(client);
+const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
+const db = drizzle(pool);
 
 // Create orchestrator
 const orchestrator = await createWorkflowOrchestrator({

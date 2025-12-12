@@ -20,7 +20,7 @@
  */
 
 import { eq, and, isNotNull, lt, inArray, sql, desc } from 'drizzle-orm';
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import {
   workflows,
   workflowOperations,
@@ -39,9 +39,9 @@ import type { WorkflowStatus, OperationStatus, WorkflowContext } from '../types'
 
 /**
  * Database instance type.
- * Supports any Drizzle PostgreSQL database instance.
+ * Supports any Drizzle PostgreSQL database instance using node-postgres (pg).
  */
-export type Database = PostgresJsDatabase<Record<string, unknown>>;
+export type Database = NodePgDatabase<Record<string, unknown>>;
 
 /**
  * Database state manager interface.
@@ -177,12 +177,12 @@ export interface ListWorkflowsOptions {
  *
  * @example
  * ```typescript
- * import { drizzle } from 'drizzle-orm/postgres-js';
- * import postgres from 'postgres';
+ * import { drizzle } from 'drizzle-orm/node-postgres';
+ * import { Pool } from 'pg';
  * import { createDbState } from '@sprqvntrs/workflows';
  *
- * const client = postgres(process.env.DATABASE_URL);
- * const db = drizzle(client);
+ * const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+ * const db = drizzle(pool);
  * const dbState = createDbState(db);
  *
  * // Create a workflow
