@@ -532,7 +532,16 @@ export async function createWorkflowOrchestrator(
       : undefined,
   });
 
-  // Track if worker is running
+  // Start pg-boss immediately so jobs can be sent without starting the worker
+  // This is essential for server/worker split architectures where the server
+  // needs to queue jobs but doesn't run the worker
+  await boss.start();
+
+  if (debug) {
+    console.log('[workflow] pg-boss started');
+  }
+
+  // Track if worker is running (separate from boss being started)
   let workerStarted = false;
 
   // =========================================================================
@@ -881,8 +890,7 @@ export async function createWorkflowOrchestrator(
         throw new WorkflowError('Worker already started', 'ALREADY_STARTED');
       }
 
-      // Start pg-boss
-      await boss.start();
+      // pg-boss is already started in createWorkflowOrchestrator()
 
       // Set up graceful shutdown
       setupGracefulShutdown(boss, {
