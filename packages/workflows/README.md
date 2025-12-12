@@ -306,6 +306,45 @@ await orchestrator.stopWorker();
 orchestrator.validate(); // Throws if validation fails
 ```
 
+### pg-boss Introspection
+
+Query pg-boss internal tables directly for debugging and monitoring:
+
+```typescript
+import { createPgBossQueries } from '@sprqvntrs/workflows';
+import { Pool } from 'pg';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const queries = createPgBossQueries(pool);
+
+// Get all current jobs (id, name, state)
+const jobs = await queries.getJobs();
+
+// Get job statistics grouped by queue and state
+const stats = await queries.getJobStats();
+// Returns: [{ name: 'content-generation', state: 'active', count: 5 }, ...]
+
+// Get all configured schedules
+const schedules = await queries.getSchedules();
+// Returns: [{ name: 'daily-sync', cron: '0 0 * * *', timezone: 'UTC', ... }, ...]
+
+// Get job history for specific queues (from archive table)
+const history = await queries.getJobHistory(['content-generation', 'data-sync']);
+// Returns up to 50 most recent archived jobs
+
+// Cancel and delete all jobs for a workflow
+const result = await queries.deleteWorkflowJobs('workflow-123');
+console.log(`Cancelled ${result.cancelledCount}, deleted ${result.deletedCount} jobs`);
+```
+
+#### Custom Schema
+
+If you use a custom pg-boss schema:
+
+```typescript
+const queries = createPgBossQueries(pool, { schema: 'my_pgboss' });
+```
+
 ### Template Structure
 
 ```typescript
