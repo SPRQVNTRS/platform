@@ -1,5 +1,22 @@
 # @sprqvntrs/workflows
 
+## 0.2.3
+
+### Patch Changes
+
+- 2eb2481: Fix: create queues after pg-boss start and add admin query methods
+
+  Bug fixes:
+  - Create all configured queues after boss.start() (pg-boss v10+ requires explicit queue creation)
+  - Add ensureQueueExists() helper to create queues on-demand for templates not in initial config
+  - Call ensureQueueExists() in start() method before sending jobs
+
+  New features:
+  - Add deletePendingJobs(queueName?) - Delete all pending jobs, optionally by queue
+  - Add cancelPendingJobs(queueName?) - Cancel pending jobs without deleting them
+  - Add purgeJobsByState(state, queueName?) - Delete jobs by state
+  - Export PendingJobsResult type
+
 ## 0.2.2
 
 ### Patch Changes
