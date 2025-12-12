@@ -607,9 +607,9 @@ export async function createWorkflowOrchestrator(
           expireInSeconds: queueConfig.expireInSeconds ?? 3600,
         },
         {
-          priority,
-          startAfter: startAfterSeconds ? startAfterSeconds : undefined,
-          singletonKey,
+          ...(priority !== undefined && { priority }),
+          ...(startAfterSeconds !== undefined && { startAfter: startAfterSeconds }),
+          ...(singletonKey !== undefined && { singletonKey }),
         },
       );
 
