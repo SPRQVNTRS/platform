@@ -541,12 +541,36 @@ export async function createWorkflowOrchestrator(
     console.log('[workflow] pg-boss started');
   }
 
+  // Create all configured queues (pg-boss v10+ requires explicit queue creation)
+  const createdQueues = new Set<string>();
+  for (const queue of queues) {
+    await boss.createQueue(queue.name);
+    createdQueues.add(queue.name);
+    if (debug) {
+      console.log(`[workflow] Created queue: ${queue.name}`);
+    }
+  }
+
   // Track if worker is running (separate from boss being started)
   let workerStarted = false;
 
   // =========================================================================
   // Helper Functions
   // =========================================================================
+
+  /**
+   * Ensures a queue exists, creating it if necessary.
+   * This is idempotent - calling multiple times is safe.
+   */
+  async function ensureQueueExists(queueName: string): Promise<void> {
+    if (!createdQueues.has(queueName)) {
+      await boss.createQueue(queueName);
+      createdQueues.add(queueName);
+      if (debug) {
+        console.log(`[workflow] Created queue on-demand: ${queueName}`);
+      }
+    }
+  }
 
   /**
    * Processes a workflow job.
@@ -599,6 +623,9 @@ export async function createWorkflowOrchestrator(
       // Validate template exists
       const template = templateRegistry.getOrThrow(type);
 
+      // Ensure the template's queue exists (handles queues not in initial config)
+      await ensureQueueExists(template.queue);
+
       // Create workflow record
       const workflow = await dbState.createWorkflow({
         type,
@@ -632,7 +659,17 @@ export async function createWorkflowOrchestrator(
       const jobId = await boss.send(template.queue, jobData, sendOptions);
 
       if (!jobId) {
-        throw new WorkflowError('Failed to queue workflow job', 'QUEUE_ERROR');
+        // pg-boss returns null when:
+        // 1. A job with the same singletonKey already exists (expected behavior)
+        // 2. The queue doesn't exist (unusual)
+        // 3. Database connection issues
+        const reason = singletonKey
+          ? `A job with singletonKey '${singletonKey}' may already exist in queue '${template.queue}'`
+          : `Unknown reason - check pg-boss logs and database connection`;
+        throw new WorkflowError(
+          `Failed to queue workflow job: ${reason}`,
+          'QUEUE_ERROR',
+        );
       }
 
       // Update workflow with job ID
