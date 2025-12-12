@@ -1,5 +1,15 @@
 # @sprqvntrs/workflows
 
+## 0.2.1
+
+### Patch Changes
+
+- fd9da30: Fix: prevent undefined values being passed to pg-boss SendOptions
+
+  When starting workflows without explicit priority, startAfterSeconds, or singletonKey options, undefined values were being passed to pg-boss, causing validation errors like "priority must be an integer". This fix filters out undefined values in both the orchestrator.start() method and createSendOptions() function.
+
+  Also adds comprehensive tests to the pg-boss infrastructure module to catch this bug in the future.
+
 ## 0.2.0
 
 ### Minor Changes
