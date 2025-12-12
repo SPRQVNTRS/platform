@@ -1,5 +1,15 @@
 # @sprqvntrs/workflows
 
+## 0.2.2
+
+### Patch Changes
+
+- 6be5be8: Fix: start pg-boss immediately in createWorkflowOrchestrator
+
+  pg-boss was only started in startWorker(), preventing job sending in server/worker split architectures. Now boss.start() is called in createWorkflowOrchestrator() so jobs can be queued immediately without starting a worker.
+
+  This enables proper server/worker separation where the server can create the orchestrator and queue jobs, while workers can create the orchestrator and start processing without duplicate initialization.
+
 ## 0.2.1
 
 ### Patch Changes
