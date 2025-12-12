@@ -1,6 +1,6 @@
 {
   "name": "@sprqvntrs/helpers",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Common helper utilities for the SPRQVNTRS platform",
   "type": "module",
   "main": "./index.ts",
