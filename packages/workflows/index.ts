@@ -197,6 +197,20 @@ export {
   type ListWorkflowsOptions,
 } from './src/infrastructure/db-state';
 
+// pg-boss introspection queries
+export {
+  createPgBossQueries,
+  type PgBossQueries,
+  type PgBossQueriesConfig,
+  type PgBossJobState,
+  type PgBossArchiveState,
+  type PgBossJobItem,
+  type PgBossJobStats,
+  type PgBossScheduleItem,
+  type PgBossArchiveItem,
+  type DeleteWorkflowJobsResult,
+} from './src/infrastructure/pgboss-queries';
+
 // =============================================================================
 // Coordination
 // =============================================================================
