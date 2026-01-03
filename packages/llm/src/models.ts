@@ -35,7 +35,7 @@ export const DEFAULT_MODELS = {
    */
   OPENAI_DEFAULT: {
     provider: 'openai',
-    model: 'gpt-5-mini-2025-08-07',
+    model: 'gpt-5.2-2025-12-11',
   } as ModelConfig<'openai'>,
 } as const;
 
