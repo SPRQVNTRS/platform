@@ -1,5 +1,11 @@
 # @sprqvntrs/llm
 
+## 3.2.1
+
+### Patch Changes
+
+- d5db3d4: Update OpenAI SDK to version 6.15.0 and update default OpenAI model to gpt-5.2-2025-12-11
+
 ## 3.2.0
 
 ### Minor Changes
