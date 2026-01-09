@@ -1,5 +1,5 @@
 import pino from 'pino';
-import type { Logger, MockLogger, LogEntry, LogLevel, LogContext } from '../types.js';
+import type { Logger, MockLogger, LogEntry, LogLevel, LogContext } from '../types';
 
 /**
  * Creates a mock logger for testing purposes

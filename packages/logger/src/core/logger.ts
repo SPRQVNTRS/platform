@@ -1,12 +1,12 @@
 import type { Logger as PinoLogger } from 'pino';
-import { createPinoInstance } from './pino-config.js';
-import { getRequestContext } from '../context/async-context.js';
+import { createPinoInstance } from './pino-config';
+import { getRequestContext } from '../context/async-context';
 import type {
   Logger,
   LogContext,
   CreateLoggerOptions,
   LoggerConfigureOptions,
-} from '../types.js';
+} from '../types';
 
 /**
  * Wraps a Pino logger instance with our Logger interface

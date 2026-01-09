@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { RequestContext } from '../types.js';
+import type { RequestContext } from '../types';
 
 /**
  * AsyncLocalStorage instance for maintaining request context
