@@ -1,8 +1,15 @@
 // Main factory function
-export { createLogger, StaticLogger } from './src/core/logger.js';
+export { createLogger, StaticLogger } from './src/core/logger';
 
 // Backward-compatible default export (static logger)
-export { StaticLogger as default } from './src/core/logger.js';
+export { StaticLogger as default } from './src/core/logger';
+
+// Buffered logger
+export { createBufferedLogger } from './src/core/buffered-logger';
+
+// Flush destinations
+export { jsonDestination } from './src/core/destinations';
+export type { JsonDestinationOptions } from './src/core/destinations';
 
 // Types
 export type {
@@ -16,7 +23,11 @@ export type {
   HttpLoggerOptions,
   RequestContext,
   ServerLogger,
-} from './src/types.js';
+  BufferedLogger,
+  BufferedLoggerOptions,
+  FlushDestination,
+  SerializedLogEntry,
+} from './src/types';
 
 // Context utilities for request tracing
 export {
@@ -28,7 +39,7 @@ export {
   updateRequestContext,
   generateRequestId,
   createRequestContextMiddleware,
-} from './src/context/async-context.js';
+} from './src/context/async-context';
 
 // Serializers (for advanced customization)
 export {
@@ -36,7 +47,7 @@ export {
   requestSerializer,
   responseSerializer,
   getSerializers,
-} from './src/core/serializers.js';
+} from './src/core/serializers';
 
 // Pino config (for advanced customization)
-export { createPinoConfig, createPinoInstance } from './src/core/pino-config.js';
+export { createPinoConfig, createPinoInstance } from './src/core/pino-config';
