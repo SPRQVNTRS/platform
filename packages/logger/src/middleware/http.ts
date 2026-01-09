@@ -1,11 +1,11 @@
 import pinoHttp from 'pino-http';
 import type { Options as PinoHttpOptions } from 'pino-http';
-import type { HttpLoggerOptions, LogLevel } from '../types.js';
-import { createLogger } from '../core/logger.js';
+import type { HttpLoggerOptions, LogLevel } from '../types';
+import { createLogger } from '../core/logger';
 import {
   withRequestContext,
   generateRequestId,
-} from '../context/async-context.js';
+} from '../context/async-context';
 
 /**
  * Common static file extensions to exclude from logging

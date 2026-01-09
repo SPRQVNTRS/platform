@@ -1,6 +1,6 @@
 import pino from 'pino';
-import type { CreateLoggerOptions } from '../types.js';
-import { getSerializers } from './serializers.js';
+import type { CreateLoggerOptions } from '../types';
+import { getSerializers } from './serializers';
 
 /** Default paths to redact from logs */
 const DEFAULT_REDACT_PATHS = [

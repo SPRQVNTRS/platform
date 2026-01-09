@@ -1,5 +1,5 @@
-import { createLogger } from '../core/logger.js';
-import type { Logger, ServerLogger, CreateLoggerOptions, LogLevel } from '../types.js';
+import { createLogger } from '../core/logger';
+import type { Logger, ServerLogger, CreateLoggerOptions, LogLevel } from '../types';
 
 /**
  * Options for creating a server logger
