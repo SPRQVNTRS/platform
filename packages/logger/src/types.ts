@@ -151,3 +151,48 @@ export interface ServerLogger {
   /** Log unhandled rejection */
   logUnhandledRejection(reason: unknown): void;
 }
+
+/**
+ * Serialized log entry with timestamp as ISO string
+ * Used for JSON output and external storage
+ */
+export interface SerializedLogEntry {
+  level: LogLevel;
+  message: string;
+  context?: LogContext;
+  timestamp: string;
+}
+
+/**
+ * Destination for flushing buffered log entries
+ */
+export interface FlushDestination<T> {
+  flush(entries: LogEntry[]): Promise<T>;
+}
+
+/**
+ * Options for creating a buffered logger
+ */
+export interface BufferedLoggerOptions {
+  /** Base logger to wrap (logs go here AND to buffer) */
+  logger: Logger;
+  /** Maximum buffer size before auto-flush (optional) */
+  maxBufferSize?: number;
+  /** Auto-flush callback when buffer is full (optional) */
+  onBufferFull?: (entries: LogEntry[]) => Promise<void>;
+}
+
+/**
+ * Logger that buffers entries while also logging normally
+ * Useful for capturing logs during a request/operation for later analysis
+ */
+export interface BufferedLogger extends Logger {
+  /** Get copy of buffered entries */
+  getBuffer(): LogEntry[];
+  /** Clear the buffer */
+  clearBuffer(): void;
+  /** Flush buffer to a destination and clear */
+  flush<T>(destination: FlushDestination<T>): Promise<T>;
+  /** Get current buffer size */
+  readonly bufferSize: number;
+}
