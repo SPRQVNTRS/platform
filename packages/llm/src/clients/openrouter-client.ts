@@ -249,6 +249,7 @@ export class OpenRouterClient implements LlmClientInterface {
       });
 
       let accumulatedText = '';
+      let usage: StreamChunk['usage'] | undefined;
 
       for await (const chunk of stream as any) {
         const content = chunk.choices?.[0]?.delta?.content;
@@ -261,16 +262,30 @@ export class OpenRouterClient implements LlmClientInterface {
             accumulatedText,
           };
         }
+
+        // Capture usage from chunk when present (OpenRouter includes it in final chunk)
+        // Note: OpenRouter SDK returns camelCase properties (promptTokens, completionTokens, totalTokens)
+        if (chunk.usage) {
+          usage = {
+            promptTokens: chunk.usage.promptTokens,
+            completionTokens: chunk.usage.completionTokens,
+            totalTokens: chunk.usage.totalTokens,
+          };
+        }
       }
 
-      // Final chunk
+      // Final chunk with usage
       const elapsedMs = Date.now() - startTime;
       this.logger.log(`Streaming completed in ${elapsedMs}ms`);
+      if (usage) {
+        this.logger.logUsage(usage);
+      }
 
       yield {
         text: '',
         isComplete: true,
         accumulatedText,
+        usage,
       };
     } catch (error) {
       const elapsedMs = Date.now() - startTime;

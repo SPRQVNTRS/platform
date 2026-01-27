@@ -1,5 +1,23 @@
 # @sprqvntrs/llm
 
+## 3.3.0
+
+### Minor Changes
+
+- Add streaming usage tracking to all LLM clients
+
+  The `StreamChunk.usage` field is now populated with token counts from streaming responses:
+  - **OpenAI**: Captures usage from `response.completed` event
+  - **Anthropic**: Uses `stream.finalMessage()` to retrieve usage after streaming completes
+  - **OpenRouter**: Captures `chunk.usage` from the final streaming chunk
+
+  Usage data is included in the final `StreamChunk` (where `isComplete: true`) with the following fields:
+  - `promptTokens`: Input token count
+  - `completionTokens`: Output token count
+  - `totalTokens`: Sum of input and output tokens
+
+  This enables downstream applications to track costs without sacrificing streaming performance.
+
 ## 3.2.1
 
 ### Patch Changes

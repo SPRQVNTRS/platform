@@ -173,12 +173,13 @@ export class OpenAIClient implements LlmClientInterface {
           })
         : this.openai;
 
-      const stream = await client.responses.stream({
+      const stream = client.responses.stream({
         model: this.model,
         input: prompt,
       });
 
       let accumulatedText = '';
+      let usage: StreamChunk['usage'] | undefined;
 
       for await (const chunk of stream) {
         // Handle text delta events
@@ -194,16 +195,32 @@ export class OpenAIClient implements LlmClientInterface {
             };
           }
         }
+
+        // Capture usage from response.completed event
+        if (chunk.type === 'response.completed' && 'response' in chunk) {
+          const response = (chunk as any).response;
+          if (response?.usage) {
+            usage = {
+              promptTokens: response.usage.input_tokens,
+              completionTokens: response.usage.output_tokens,
+              totalTokens: response.usage.input_tokens + response.usage.output_tokens,
+            };
+          }
+        }
       }
 
-      // Final chunk
+      // Final chunk with usage
       const elapsedMs = Date.now() - startTime;
       this.logger.log(`Streaming completed in ${elapsedMs}ms`);
+      if (usage) {
+        this.logger.logUsage(usage);
+      }
 
       yield {
         text: '',
         isComplete: true,
         accumulatedText,
+        usage,
       };
     } catch (error) {
       const elapsedMs = Date.now() - startTime;

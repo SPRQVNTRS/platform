@@ -93,11 +93,12 @@ async function testAnthropicClient() {
     throw error;
   }
 
-  // Test 4: Streaming response
-  console.log('5. Testing streaming response...');
+  // Test 4: Streaming response with usage tracking
+  console.log('5. Testing streaming response with usage tracking...');
   try {
     let fullText = '';
     let chunkCount = 0;
+    let usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | undefined;
 
     for await (const chunk of client.createStreamingResponse('Tell me a short joke.')) {
       if (!chunk.isComplete) {
@@ -105,12 +106,32 @@ async function testAnthropicClient() {
         chunkCount++;
         process.stdout.write('.');
       } else {
+        usage = chunk.usage;
         console.log();
         console.log('✓ Streaming completed');
         console.log(`  Received ${chunkCount} chunks`);
         console.log(`  Full text: ${fullText}`);
+
+        // Verify usage data
+        if (usage) {
+          console.log('✓ Usage data captured:');
+          console.log(`  Prompt tokens: ${usage.promptTokens}`);
+          console.log(`  Completion tokens: ${usage.completionTokens}`);
+          console.log(`  Total tokens: ${usage.totalTokens}`);
+        } else {
+          console.log('⚠ Warning: No usage data in final chunk');
+        }
       }
     }
+
+    // Assert usage exists (this validates the implementation)
+    if (!usage) {
+      throw new Error('Expected usage data in final streaming chunk');
+    }
+    if (typeof usage.promptTokens !== 'number' || typeof usage.completionTokens !== 'number') {
+      throw new Error('Usage data missing required token counts');
+    }
+
     console.log();
   } catch (error) {
     console.error('✗ Streaming test failed:', error);
