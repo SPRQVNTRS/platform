@@ -216,7 +216,7 @@ export class AnthropicClient implements LlmClientInterface {
           })
         : this.client;
 
-      const stream = await client.messages.stream({
+      const stream = client.messages.stream({
         model: this.model,
         max_tokens: ANTHROPIC_MAX_TOKENS,
         system: DEFAULT_SYSTEM_PROMPT,
@@ -243,14 +243,30 @@ export class AnthropicClient implements LlmClientInterface {
         }
       }
 
-      // Final chunk
+      // Get final message with usage data
+      const finalMessage = await stream.finalMessage();
+      let usage: StreamChunk['usage'] | undefined;
+
+      if (finalMessage.usage) {
+        usage = {
+          promptTokens: finalMessage.usage.input_tokens,
+          completionTokens: finalMessage.usage.output_tokens,
+          totalTokens: finalMessage.usage.input_tokens + finalMessage.usage.output_tokens,
+        };
+      }
+
+      // Final chunk with usage
       const elapsedMs = Date.now() - startTime;
       this.logger.log(`Streaming completed in ${elapsedMs}ms`);
+      if (usage) {
+        this.logger.logUsage(usage);
+      }
 
       yield {
         text: '',
         isComplete: true,
         accumulatedText,
+        usage,
       };
     } catch (error) {
       const elapsedMs = Date.now() - startTime;
