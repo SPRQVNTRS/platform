@@ -3,7 +3,7 @@ import { z } from 'zod/v3';
 import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk } from '../types/client-interface';
 import { DEFAULT_MODELS, ANTHROPIC_MAX_TOKENS, WEB_SEARCH_TOOLS, DEFAULT_SYSTEM_PROMPT } from '../models';
 import { OpenAIClient } from './openai-client';
-import { AnthropicModel } from '../model-types';
+import type { AnthropicModel } from '../model-types';
 import { DebugLogger } from '../utils/debug';
 import {
   generateRequestId,
