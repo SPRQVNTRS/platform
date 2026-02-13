@@ -360,8 +360,102 @@ async function testOpenRouterClient() {
   console.log('=== All OpenRouterClient tests with native structured outputs passed! ===');
 }
 
+/**
+ * Tests $ref/$defs resolution for Gemini models.
+ * Uses a shared Zod object instance that triggers zodToJsonSchema deduplication
+ * via $defs + $ref — which Gemini rejects without the resolveRefs fix.
+ */
+async function testGeminiRefResolution() {
+  console.log('=== Testing Gemini $ref/$defs Resolution ===\n');
+
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
+  if (!openrouterKey) {
+    throw new Error('OPENROUTER_API_KEY not found in environment variables');
+  }
+
+  const geminiClient = new OpenRouterClient({
+    apiKey: openrouterKey,
+    model: 'google/gemini-2.5-flash',
+    debug: true,
+    timeout: 60000,
+  });
+
+  // Test 1: Shared object reference (the exact bug scenario from the issue)
+  console.log('1. Testing shared Zod object reference (triggers $ref dedup)...');
+  try {
+    // This SINGLE instance used in multiple positions causes zodToJsonSchema
+    // to emit $defs + $ref pointers, which Gemini rejects without the fix.
+    const imageDetail = z.object({
+      id: z.number(),
+      url: z.string(),
+      reasoning: z.string(),
+    });
+
+    const schema = z.object({
+      bestImage: imageDetail,
+      otherImages: z.array(imageDetail),
+    });
+
+    const result = await geminiClient.createStructuredResponse({
+      prompt: 'You are selecting images. The best image has id 1, url "https://example.com/best.jpg", reasoning "highest quality". Other images: id 2 url "https://example.com/other.jpg" reasoning "good alternative".',
+      schema,
+      logExecutionTime: true,
+    });
+
+    console.log('✓ Shared ref schema succeeded:', JSON.stringify(result, null, 2));
+
+    if (typeof result.bestImage.id !== 'number') throw new Error('Invalid bestImage.id');
+    if (!Array.isArray(result.otherImages)) throw new Error('Invalid otherImages');
+    if (typeof result.otherImages[0]?.url !== 'string') throw new Error('Invalid otherImages[0].url');
+    console.log('  ✓ Validated structure\n');
+  } catch (error) {
+    console.error('✗ Shared ref test failed:', error);
+    throw error;
+  }
+
+  // Test 2: Nullable with shared ref (anyOf + $ref combo)
+  console.log('2. Testing nullable shared ref (anyOf + $ref)...');
+  try {
+    const detail = z.object({
+      name: z.string(),
+      score: z.number(),
+    });
+
+    const schema = z.object({
+      primary: detail.nullable(),
+      alternatives: z.array(detail),
+    });
+
+    const result = await geminiClient.createStructuredResponse({
+      prompt: 'Primary item: name "Alpha" score 95. Alternatives: name "Beta" score 80.',
+      schema,
+      logExecutionTime: true,
+    });
+
+    console.log('✓ Nullable + shared ref succeeded:', JSON.stringify(result, null, 2));
+
+    if (typeof result.primary?.name !== 'string') throw new Error('Invalid primary.name');
+    if (!Array.isArray(result.alternatives)) throw new Error('Invalid alternatives');
+    console.log('  ✓ Validated structure\n');
+  } catch (error) {
+    console.error('✗ Nullable shared ref test failed:', error);
+    throw error;
+  }
+
+  console.log('=== All Gemini $ref/$defs resolution tests passed! ===');
+}
+
 // Run tests
-testOpenRouterClient().catch((error) => {
-  console.error('\n❌ Test suite failed:', error);
-  process.exit(1);
-});
+const testSuite = process.argv[2];
+
+if (testSuite === '--gemini-refs') {
+  testGeminiRefResolution().catch((error) => {
+    console.error('\n❌ Gemini ref resolution tests failed:', error);
+    process.exit(1);
+  });
+} else {
+  testOpenRouterClient().catch((error) => {
+    console.error('\n❌ Test suite failed:', error);
+    process.exit(1);
+  });
+}
