@@ -8,6 +8,7 @@ import {
   wrapSdkError,
   type LlmErrorContext,
 } from '../utils/errors';
+import { resolveRefs } from '../utils/resolve-refs';
 // Use OpenAI SDK's vendored zod-to-json-schema for v3 compatibility
 import { zodToJsonSchema } from 'openai/_vendor/zod-to-json-schema/zodToJsonSchema.mjs';
 
@@ -79,6 +80,14 @@ export class OpenRouterClient implements LlmClientInterface {
   }
 
   /**
+   * Returns true when the configured model is a Google/Gemini model,
+   * which requires $ref/$defs inlining and anyOf nullable conversion.
+   */
+  private isGeminiModel(): boolean {
+    return this.model.startsWith('google/');
+  }
+
+  /**
    * Converts a Zod schema to OpenRouter-compatible JSON Schema format
    * Uses the same zodToJsonSchema approach as OpenAI SDK for v3 compatibility
    *
@@ -95,13 +104,22 @@ export class OpenRouterClient implements LlmClientInterface {
     try {
       // Use OpenAI SDK's vendored zod-to-json-schema for v3 compatibility
       // This is the same approach OpenAI SDK uses internally
-      const jsonSchema = zodToJsonSchema(schema, {
+      let jsonSchema = zodToJsonSchema(schema, {
         openaiStrictMode: true,
         name,
         nameStrategy: 'duplicate-ref',
         $refStrategy: 'extract-to-root',
         nullableStrategy: 'property',
       });
+
+      // Gemini models do not support $ref/$defs in JSON Schema.
+      // Inline all references and convert anyOf nullable patterns.
+      if (this.isGeminiModel()) {
+        this.logger.log('Resolving $ref/$defs for Gemini model compatibility', {
+          model: this.model,
+        });
+        jsonSchema = resolveRefs(jsonSchema as Record<string, unknown>);
+      }
 
       return {
         name,
