@@ -51,16 +51,21 @@ This repo uses [Changesets](https://github.com/changesets/changesets) for versio
 - pnpm 10.18.1
 - TypeScript strict mode (`tsconfig.base.json`)
 
-### Package tests
+### Testing
 
-Tests are script-style files run with `tsx` (no test framework). Each package has its own test scripts:
+**Unit tests** use [Vitest](https://vitest.dev/). New packages should use vitest for unit tests.
 
 ```sh
-pnpm --filter @sprqvntrs/llm test           # run all tests for a package
-pnpm exec tsx tests/some-test.ts             # run a specific test file
+pnpm --filter @sprqvntrs/wp-rest test        # run unit tests for a package
+pnpm --filter @sprqvntrs/wp-rest test:watch  # run in watch mode
 ```
 
-Integration tests (e.g., `tests/openrouter-client.test.ts`) require API keys in `packages/<pkg>/.env`. Unit tests (e.g., `tests/resolve-refs.test.ts`) have no external dependencies.
+**E2E / integration tests** (`@sprqvntrs/llm`) are script-style files run with `tsx` that test against live upstream providers. These require API keys in `packages/<pkg>/.env`.
+
+```sh
+pnpm --filter @sprqvntrs/llm test            # run all e2e tests
+pnpm exec tsx tests/some-test.ts             # run a specific test file
+```
 
 ## Commit Conventions
 
@@ -70,3 +75,15 @@ Follow conventional commits: `type(scope): description`
 - `fix(llm):` — bug fix
 - `chore:` — maintenance, version bumps
 - `refactor(llm):` — code restructuring
+
+## Tracker
+
+This project uses `.tracker/` for implementation tracking. See [`.tracker/00-INDEX.md`](.tracker/00-INDEX.md) for the progress dashboard.
+
+### Workflow
+
+- `/tracker:status` — view progress dashboard
+- `/tracker:work` — pick up the next task
+- `/tracker:add` — add milestones or specs
+- `/tracker:commit` — stage and commit with tracker context
+- `/tracker:worklog` — inter-agent communication log for persistent context
