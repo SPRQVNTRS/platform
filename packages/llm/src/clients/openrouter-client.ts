@@ -169,12 +169,14 @@ export class OpenRouterClient implements LlmClientInterface {
       : this.client;
 
     const response = await client.chat.send({
-      model: this.model,
-      messages: [
-        { role: 'system', content: DEFAULT_SYSTEM_PROMPT },
-        { role: 'user', content: prompt },
-      ],
-      stream: false,
+      chatGenerationParams: {
+        model: this.model,
+        messages: [
+          { role: 'system', content: DEFAULT_SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ],
+        stream: false,
+      },
     });
 
     return response;
@@ -257,13 +259,15 @@ export class OpenRouterClient implements LlmClientInterface {
         : this.client;
 
       const stream = await client.chat.send({
-        model: this.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt },
-        ],
-        stream: true,
-        ...(responseFormat && { responseFormat }),
+        chatGenerationParams: {
+          model: this.model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: prompt },
+          ],
+          stream: true,
+          ...(responseFormat && { responseFormat }),
+        },
       });
 
       let accumulatedText = '';
@@ -445,13 +449,15 @@ export class OpenRouterClient implements LlmClientInterface {
         } else {
           // Non-streaming path with structured outputs
           const response = await client.chat.send({
-            model: this.model,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: prompt },
-            ],
-            stream: false,
-            responseFormat,
+            chatGenerationParams: {
+              model: this.model,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: prompt },
+              ],
+              stream: false,
+              responseFormat,
+            },
           });
 
           this.logger.logUsage((response as any).usage || {});
