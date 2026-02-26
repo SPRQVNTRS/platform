@@ -24,9 +24,9 @@
     "test:openai": "tsx tests/openai-client.test.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.67.0",
-    "@openrouter/sdk": "^0.5.1",
-    "openai": "^6.15.0",
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@openrouter/sdk": "^0.9.11",
+    "openai": "^6.25.0",
     "qs": "^6.12.1"
   },
   "peerDependencies": {
