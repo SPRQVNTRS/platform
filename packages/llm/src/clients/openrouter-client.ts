@@ -2,6 +2,7 @@ import { OpenRouter } from '@openrouter/sdk';
 import { z } from 'zod/v3';
 import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk, LlmTokenUsage } from '../types/client-interface';
 import { DEFAULT_SYSTEM_PROMPT } from '../models';
+import { calculateUsageCost } from '../pricing';
 import { DebugLogger } from '../utils/debug';
 import {
   generateRequestId,
@@ -452,10 +453,14 @@ export class OpenRouterClient implements LlmClientInterface {
 
             // Capture usage from the final chunk
             if (chunk.usage) {
+              const promptTokens = chunk.usage.promptTokens ?? 0;
+              const completionTokens = chunk.usage.completionTokens ?? 0;
               this._lastUsage = {
-                promptTokens: chunk.usage.promptTokens ?? 0,
-                completionTokens: chunk.usage.completionTokens ?? 0,
+                promptTokens,
+                completionTokens,
                 totalTokens: chunk.usage.totalTokens ?? 0,
+                model: this.model,
+                cost: calculateUsageCost(this.model, promptTokens, completionTokens),
               };
             }
           }
@@ -478,10 +483,14 @@ export class OpenRouterClient implements LlmClientInterface {
 
           const rawUsage = (response as any).usage;
           if (rawUsage) {
+            const promptTokens = rawUsage.prompt_tokens ?? rawUsage.promptTokens ?? 0;
+            const completionTokens = rawUsage.completion_tokens ?? rawUsage.completionTokens ?? 0;
             this._lastUsage = {
-              promptTokens: rawUsage.prompt_tokens ?? rawUsage.promptTokens ?? 0,
-              completionTokens: rawUsage.completion_tokens ?? rawUsage.completionTokens ?? 0,
+              promptTokens,
+              completionTokens,
               totalTokens: rawUsage.total_tokens ?? rawUsage.totalTokens ?? 0,
+              model: this.model,
+              cost: calculateUsageCost(this.model, promptTokens, completionTokens),
             };
           }
           this.logger.logUsage(rawUsage || {});

@@ -88,6 +88,20 @@ export interface StreamChunk {
 }
 
 /**
+ * Cost breakdown for an LLM API call.
+ */
+export interface LlmUsageCost {
+  /** Cost for non-cached input tokens */
+  input: number;
+  /** Cost for output/completion tokens */
+  output: number;
+  /** Cost for cached input tokens (reduced rate) */
+  cachedInput: number;
+  /** Total cost: input + cachedInput + output */
+  total: number;
+}
+
+/**
  * Token usage data from an LLM API call.
  */
 export interface LlmTokenUsage {
@@ -95,6 +109,10 @@ export interface LlmTokenUsage {
   completionTokens: number;
   totalTokens: number;
   cachedTokens?: number;
+  /** The model ID used for this call */
+  model: string;
+  /** Calculated cost breakdown, or null if model not in pricing table */
+  cost: LlmUsageCost | null;
 }
 
 /**

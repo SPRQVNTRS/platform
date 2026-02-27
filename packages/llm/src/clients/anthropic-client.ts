@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod/v3';
 import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk, LlmTokenUsage } from '../types/client-interface';
 import { DEFAULT_MODELS, ANTHROPIC_MAX_TOKENS, WEB_SEARCH_TOOLS, DEFAULT_SYSTEM_PROMPT } from '../models';
+import { calculateUsageCost } from '../pricing';
 import { OpenAIClient } from './openai-client';
 import type { AnthropicModel } from '../model-types';
 import { DebugLogger } from '../utils/debug';
@@ -458,11 +459,16 @@ export class AnthropicClient implements LlmClientInterface {
         // Capture usage from the stream's final message
         const finalMessage = await messageStream.finalMessage();
         if (finalMessage.usage) {
+          const promptTokens = finalMessage.usage.input_tokens ?? 0;
+          const completionTokens = finalMessage.usage.output_tokens ?? 0;
+          const cachedTokens: number | undefined = (finalMessage.usage as any).cache_read_input_tokens ?? undefined;
           this._lastUsage = {
-            promptTokens: finalMessage.usage.input_tokens ?? 0,
-            completionTokens: finalMessage.usage.output_tokens ?? 0,
-            totalTokens: (finalMessage.usage.input_tokens ?? 0) + (finalMessage.usage.output_tokens ?? 0),
-            cachedTokens: (finalMessage.usage as any).cache_read_input_tokens ?? undefined,
+            promptTokens,
+            completionTokens,
+            totalTokens: promptTokens + completionTokens,
+            cachedTokens,
+            model: this.model,
+            cost: calculateUsageCost(this.model, promptTokens, completionTokens, cachedTokens),
           };
         }
       } else {
@@ -496,11 +502,16 @@ export class AnthropicClient implements LlmClientInterface {
 
         // Capture usage from the non-streaming response
         if (anthropicResponse.usage) {
+          const promptTokens = anthropicResponse.usage.input_tokens ?? 0;
+          const completionTokens = anthropicResponse.usage.output_tokens ?? 0;
+          const cachedTokens: number | undefined = (anthropicResponse.usage as any).cache_read_input_tokens ?? undefined;
           this._lastUsage = {
-            promptTokens: anthropicResponse.usage.input_tokens ?? 0,
-            completionTokens: anthropicResponse.usage.output_tokens ?? 0,
-            totalTokens: (anthropicResponse.usage.input_tokens ?? 0) + (anthropicResponse.usage.output_tokens ?? 0),
-            cachedTokens: (anthropicResponse.usage as any).cache_read_input_tokens ?? undefined,
+            promptTokens,
+            completionTokens,
+            totalTokens: promptTokens + completionTokens,
+            cachedTokens,
+            model: this.model,
+            cost: calculateUsageCost(this.model, promptTokens, completionTokens, cachedTokens),
           };
         }
       }

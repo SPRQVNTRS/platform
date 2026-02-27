@@ -13,7 +13,11 @@ export type { AnthropicClientConfig } from './src/clients/anthropic-client';
 export type { OpenRouterClientConfig } from './src/clients/openrouter-client';
 
 // Interface and base types
-export type { LlmClientInterface, BaseLlmClientConfig, BatchProcessOptions, StreamChunk, LlmTokenUsage } from './src/types/client-interface';
+export type { LlmClientInterface, BaseLlmClientConfig, BatchProcessOptions, StreamChunk, LlmTokenUsage, LlmUsageCost } from './src/types/client-interface';
+
+// Pricing utilities
+export { MODEL_PRICING, calculateUsageCost } from './src/pricing';
+export type { ModelPricing } from './src/pricing';
 
 // Model types
 export type { ModelConfig, ProviderModelMap, OpenAIModel, AnthropicModel, OpenRouterModel } from './src/model-types';

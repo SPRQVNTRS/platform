@@ -36,12 +36,29 @@ function assertUsage(clientName: string, mode: string, usage: LlmTokenUsage | nu
   if (usage.totalTokens <= 0) {
     throw new Error(`${clientName} (${mode}): totalTokens should be > 0, got ${usage.totalTokens}`);
   }
+  if (!usage.model || typeof usage.model !== 'string') {
+    throw new Error(`${clientName} (${mode}): model should be a non-empty string, got ${usage.model}`);
+  }
+  if (!usage.cost) {
+    throw new Error(`${clientName} (${mode}): cost should not be null for known models`);
+  }
+  if (usage.cost.total <= 0) {
+    throw new Error(`${clientName} (${mode}): cost.total should be > 0, got ${usage.cost.total}`);
+  }
+  if (usage.cost.input < 0) {
+    throw new Error(`${clientName} (${mode}): cost.input should be >= 0, got ${usage.cost.input}`);
+  }
+  if (usage.cost.output <= 0) {
+    throw new Error(`${clientName} (${mode}): cost.output should be > 0, got ${usage.cost.output}`);
+  }
   console.log(`  promptTokens: ${usage.promptTokens}`);
   console.log(`  completionTokens: ${usage.completionTokens}`);
   console.log(`  totalTokens: ${usage.totalTokens}`);
   if (usage.cachedTokens !== undefined) {
     console.log(`  cachedTokens: ${usage.cachedTokens}`);
   }
+  console.log(`  model: ${usage.model}`);
+  console.log(`  cost: $${usage.cost.total.toFixed(8)} (input: $${usage.cost.input.toFixed(8)}, output: $${usage.cost.output.toFixed(8)}, cachedInput: $${usage.cost.cachedInput.toFixed(8)})`);
 }
 
 async function testOpenAILastUsage() {

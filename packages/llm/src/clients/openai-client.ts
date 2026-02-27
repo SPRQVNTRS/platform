@@ -3,6 +3,7 @@ import { zodTextFormat } from 'openai/helpers/zod';
 import { z } from 'zod/v3';
 import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk, LlmTokenUsage } from '../types/client-interface';
 import { DEFAULT_MODELS, WEB_SEARCH_TOOLS, DEFAULT_SYSTEM_PROMPT } from '../models';
+import { calculateUsageCost } from '../pricing';
 import { DebugLogger } from '../utils/debug';
 import {
   generateRequestId,
@@ -373,11 +374,16 @@ export class OpenAIClient implements LlmClientInterface {
             if (chunk.type === 'response.completed' && 'response' in chunk) {
               const response = (chunk as any).response;
               if (response?.usage) {
+                const promptTokens = response.usage.input_tokens ?? 0;
+                const completionTokens = response.usage.output_tokens ?? 0;
+                const cachedTokens: number | undefined = response.usage.input_tokens_details?.cached_tokens ?? undefined;
                 this._lastUsage = {
-                  promptTokens: response.usage.input_tokens ?? 0,
-                  completionTokens: response.usage.output_tokens ?? 0,
-                  totalTokens: (response.usage.input_tokens ?? 0) + (response.usage.output_tokens ?? 0),
-                  cachedTokens: response.usage.input_tokens_details?.cached_tokens ?? undefined,
+                  promptTokens,
+                  completionTokens,
+                  totalTokens: promptTokens + completionTokens,
+                  cachedTokens,
+                  model: this.model,
+                  cost: calculateUsageCost(this.model, promptTokens, completionTokens, cachedTokens),
                 };
               }
             }
@@ -408,11 +414,16 @@ export class OpenAIClient implements LlmClientInterface {
           });
 
           if (response.usage) {
+            const promptTokens = response.usage.input_tokens ?? 0;
+            const completionTokens = response.usage.output_tokens ?? 0;
+            const cachedTokens: number | undefined = (response.usage as any).input_tokens_details?.cached_tokens ?? undefined;
             this._lastUsage = {
-              promptTokens: response.usage.input_tokens ?? 0,
-              completionTokens: response.usage.output_tokens ?? 0,
-              totalTokens: (response.usage.input_tokens ?? 0) + (response.usage.output_tokens ?? 0),
-              cachedTokens: (response.usage as any).input_tokens_details?.cached_tokens ?? undefined,
+              promptTokens,
+              completionTokens,
+              totalTokens: promptTokens + completionTokens,
+              cachedTokens,
+              model: this.model,
+              cost: calculateUsageCost(this.model, promptTokens, completionTokens, cachedTokens),
             };
           }
           this.logger.logUsage(response.usage || {});
