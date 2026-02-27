@@ -1,7 +1,7 @@
 import { OpenAI } from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import { z } from 'zod/v3';
-import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk } from '../types/client-interface';
+import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk, LlmTokenUsage } from '../types/client-interface';
 import { DEFAULT_MODELS, WEB_SEARCH_TOOLS, DEFAULT_SYSTEM_PROMPT } from '../models';
 import { DebugLogger } from '../utils/debug';
 import {
@@ -28,6 +28,11 @@ export class OpenAIClient implements LlmClientInterface {
   private logger: DebugLogger;
   private timeout: number;
   private maxRetries: number;
+  private _lastUsage: LlmTokenUsage | null = null;
+
+  get lastUsage(): LlmTokenUsage | null {
+    return this._lastUsage;
+  }
 
   /**
    * Creates a new OpenAIClient instance
@@ -289,6 +294,8 @@ export class OpenAIClient implements LlmClientInterface {
         (formatGuidance ? `${formatGuidance}\n\n${responseInstructions}` : responseInstructions)
       : formatGuidance;
 
+    this._lastUsage = null;
+
     const effectiveTimeout = timeout ?? this.timeout;
     const requestId = generateRequestId();
     let attempts = 0;
@@ -361,6 +368,19 @@ export class OpenAIClient implements LlmClientInterface {
                 }
               }
             }
+
+            // Capture usage from response.completed event
+            if (chunk.type === 'response.completed' && 'response' in chunk) {
+              const response = (chunk as any).response;
+              if (response?.usage) {
+                this._lastUsage = {
+                  promptTokens: response.usage.input_tokens ?? 0,
+                  completionTokens: response.usage.output_tokens ?? 0,
+                  totalTokens: (response.usage.input_tokens ?? 0) + (response.usage.output_tokens ?? 0),
+                  cachedTokens: response.usage.input_tokens_details?.cached_tokens ?? undefined,
+                };
+              }
+            }
           }
 
           this.logger.log(`Streaming completed, total: ${accumulatedText.length} chars, parsing...`);
@@ -387,6 +407,14 @@ export class OpenAIClient implements LlmClientInterface {
             ...(tools && { tools }),
           });
 
+          if (response.usage) {
+            this._lastUsage = {
+              promptTokens: response.usage.input_tokens ?? 0,
+              completionTokens: response.usage.output_tokens ?? 0,
+              totalTokens: (response.usage.input_tokens ?? 0) + (response.usage.output_tokens ?? 0),
+              cachedTokens: (response.usage as any).input_tokens_details?.cached_tokens ?? undefined,
+            };
+          }
           this.logger.logUsage(response.usage || {});
           parsedOutput = response.output_parsed;
 

@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod/v3';
-import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk } from '../types/client-interface';
+import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk, LlmTokenUsage } from '../types/client-interface';
 import { DEFAULT_MODELS, ANTHROPIC_MAX_TOKENS, WEB_SEARCH_TOOLS, DEFAULT_SYSTEM_PROMPT } from '../models';
 import { OpenAIClient } from './openai-client';
 import type { AnthropicModel } from '../model-types';
@@ -35,6 +35,11 @@ export class AnthropicClient implements LlmClientInterface {
   private logger: DebugLogger;
   private timeout: number;
   private maxRetries: number;
+  private _lastUsage: LlmTokenUsage | null = null;
+
+  get lastUsage(): LlmTokenUsage | null {
+    return this._lastUsage;
+  }
 
   /**
    * Creates a new AnthropicClient instance
@@ -379,6 +384,7 @@ export class AnthropicClient implements LlmClientInterface {
       : formatGuidance;
 
     const effectiveTimeout = timeout ?? this.timeout;
+    this._lastUsage = null;
     const requestId = generateRequestId();
     const startTime = Date.now();
 
@@ -448,6 +454,17 @@ export class AnthropicClient implements LlmClientInterface {
 
         this.logger.log(`Streaming completed, total: ${accumulatedText.length} chars`);
         textContent = accumulatedText;
+
+        // Capture usage from the stream's final message
+        const finalMessage = await messageStream.finalMessage();
+        if (finalMessage.usage) {
+          this._lastUsage = {
+            promptTokens: finalMessage.usage.input_tokens ?? 0,
+            completionTokens: finalMessage.usage.output_tokens ?? 0,
+            totalTokens: (finalMessage.usage.input_tokens ?? 0) + (finalMessage.usage.output_tokens ?? 0),
+            cachedTokens: (finalMessage.usage as any).cache_read_input_tokens ?? undefined,
+          };
+        }
       } else {
         // Non-streaming path
         const anthropicResponse = await client.messages.create({
@@ -476,6 +493,16 @@ export class AnthropicClient implements LlmClientInterface {
         }
 
         textContent = textBlock.text;
+
+        // Capture usage from the non-streaming response
+        if (anthropicResponse.usage) {
+          this._lastUsage = {
+            promptTokens: anthropicResponse.usage.input_tokens ?? 0,
+            completionTokens: anthropicResponse.usage.output_tokens ?? 0,
+            totalTokens: (anthropicResponse.usage.input_tokens ?? 0) + (anthropicResponse.usage.output_tokens ?? 0),
+            cachedTokens: (anthropicResponse.usage as any).cache_read_input_tokens ?? undefined,
+          };
+        }
       }
 
       this.logger.logResponsePreview(textContent);

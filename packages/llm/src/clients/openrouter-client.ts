@@ -1,6 +1,6 @@
 import { OpenRouter } from '@openrouter/sdk';
 import { z } from 'zod/v3';
-import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk } from '../types/client-interface';
+import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk, LlmTokenUsage } from '../types/client-interface';
 import { DEFAULT_SYSTEM_PROMPT } from '../models';
 import { DebugLogger } from '../utils/debug';
 import {
@@ -42,6 +42,11 @@ export class OpenRouterClient implements LlmClientInterface {
   private model: string;
   private logger: DebugLogger;
   private timeout: number;
+  private _lastUsage: LlmTokenUsage | null = null;
+
+  get lastUsage(): LlmTokenUsage | null {
+    return this._lastUsage;
+  }
 
   /**
    * Creates a new OpenRouterClient instance
@@ -378,6 +383,8 @@ export class OpenRouterClient implements LlmClientInterface {
         : responseInstructions
       : formatGuidance;
 
+    this._lastUsage = null;
+
     const effectiveTimeout = timeout ?? this.timeout;
     const requestId = generateRequestId();
     let attempts = 0;
@@ -442,6 +449,15 @@ export class OpenRouterClient implements LlmClientInterface {
                 lastLoggedLength = accumulatedText.length;
               }
             }
+
+            // Capture usage from the final chunk
+            if (chunk.usage) {
+              this._lastUsage = {
+                promptTokens: chunk.usage.promptTokens ?? 0,
+                completionTokens: chunk.usage.completionTokens ?? 0,
+                totalTokens: chunk.usage.totalTokens ?? 0,
+              };
+            }
           }
 
           this.logger.log(`Streaming completed, total: ${accumulatedText.length} chars`);
@@ -460,7 +476,15 @@ export class OpenRouterClient implements LlmClientInterface {
             },
           });
 
-          this.logger.logUsage((response as any).usage || {});
+          const rawUsage = (response as any).usage;
+          if (rawUsage) {
+            this._lastUsage = {
+              promptTokens: rawUsage.prompt_tokens ?? rawUsage.promptTokens ?? 0,
+              completionTokens: rawUsage.completion_tokens ?? rawUsage.completionTokens ?? 0,
+              totalTokens: rawUsage.total_tokens ?? rawUsage.totalTokens ?? 0,
+            };
+          }
+          this.logger.logUsage(rawUsage || {});
           contentString = this.extractContentFromResponse(response);
         }
 

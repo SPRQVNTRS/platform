@@ -13,7 +13,7 @@ export type { AnthropicClientConfig } from './src/clients/anthropic-client';
 export type { OpenRouterClientConfig } from './src/clients/openrouter-client';
 
 // Interface and base types
-export type { LlmClientInterface, BaseLlmClientConfig, BatchProcessOptions, StreamChunk } from './src/types/client-interface';
+export type { LlmClientInterface, BaseLlmClientConfig, BatchProcessOptions, StreamChunk, LlmTokenUsage } from './src/types/client-interface';
 
 // Model types
 export type { ModelConfig, ProviderModelMap, OpenAIModel, AnthropicModel, OpenRouterModel } from './src/model-types';
