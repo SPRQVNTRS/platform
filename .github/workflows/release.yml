@@ -4,21 +4,18 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
   contents: write
-  pull-requests: write
   packages: write
 
 jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    outputs:
-      published: ${{ steps.changesets.outputs.published }}
-      publishedPackages: ${{ steps.changesets.outputs.publishedPackages }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
@@ -38,8 +35,7 @@ jobs:
 
       - name: Get pnpm store directory
         shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
       - uses: actions/cache@v4
         name: Setup pnpm cache
@@ -52,16 +48,25 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Create Release Pull Request or Publish to npm
-        id: changesets
-        uses: changesets/action@v1
-        with:
-          publish: pnpm release
-          version: pnpm version-packages
-          commit: 'chore: version packages'
-          title: 'chore: version packages'
+      - name: Version packages
+        run: |
+          # Check for pending changesets (any .md file that isn't README)
+          CHANGESETS=$(find .changeset -name '*.md' ! -name 'README.md' 2>/dev/null)
+          if [ -n "$CHANGESETS" ]; then
+            echo "::notice::Pending changesets found, versioning packages..."
+            pnpm version-packages
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .
+            git commit -m "chore: version packages [skip ci]"
+            git push
+          else
+            echo "::notice::No pending changesets"
+          fi
+
+      - name: Publish packages
+        run: pnpm release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker-images:

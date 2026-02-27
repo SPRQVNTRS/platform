@@ -26,11 +26,21 @@ This repo uses [Changesets](https://github.com/changesets/changesets) for versio
      ```
    - Bump types: `patch` (bug fixes), `minor` (new features), `major` (breaking changes)
 
-2. **On push to `main`**, the `Release` GitHub Action (`.github/workflows/release.yml`) runs `changesets/action`:
-   - If pending changesets exist, it opens (or updates) a **"chore: version packages"** PR that bumps `package.json` versions and updates changelogs
-   - When that PR is merged, the action **publishes** the updated packages to GitHub Packages (`npm.pkg.github.com`)
+2. **On push to `main`**, the `Release` GitHub Action (`.github/workflows/release.yml`) automatically:
+   - Detects pending changesets
+   - Runs `pnpm version-packages` to bump versions and update changelogs
+   - Commits the version bumps with `[skip ci]` and pushes
+   - Publishes updated packages to GitHub Packages (`npm.pkg.github.com`)
+   - All in a single workflow run — no intermediate PR
 
 3. **Do NOT manually bump versions** in `package.json` — changesets handles this automatically
+
+4. **Manual fallback**: If a publish fails or you need to re-trigger, run:
+   ```sh
+   gh workflow run release.yml
+   ```
+
+5. **`/release` command**: Use this to analyze changes, create changeset files, push, and monitor the workflow
 
 ### Commands
 
