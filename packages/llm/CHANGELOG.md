@@ -1,5 +1,15 @@
 # @sprqvntrs/llm
 
+## 3.4.0
+
+### Minor Changes
+
+- bdfcd11: feat(llm): bump upstream SDK dependencies (anthropic 0.78, openai 6.25, openrouter 0.9.11)
+- e1fc995: feat(llm): add lastUsage property to all LLM clients for token usage tracking
+- 86323ee: feat(llm): enrich lastUsage with model name and calculated cost
+
+  Added auto-generated pricing data from OpenRouter's API and enriched `LlmTokenUsage` with `model` (string) and `cost` (LlmUsageCost | null) fields. Consumers can now access `client.lastUsage.cost.total` directly instead of maintaining their own pricing tables. New exports: `MODEL_PRICING`, `calculateUsageCost`, `ModelPricing`, `LlmUsageCost`.
+
 ## 3.3.2
 
 ### Patch Changes
