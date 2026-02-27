@@ -88,10 +88,26 @@ export interface StreamChunk {
 }
 
 /**
+ * Token usage data from an LLM API call.
+ */
+export interface LlmTokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cachedTokens?: number;
+}
+
+/**
  * Unified interface that all LLM clients must implement
  * This ensures consistent API across different providers
  */
 export interface LlmClientInterface {
+  /**
+   * Token usage from the most recent createStructuredResponse call.
+   * Reset to null before each call, populated after successful completion.
+   */
+  readonly lastUsage: LlmTokenUsage | null;
+
   /**
    * Validates that the client is properly configured
    * @returns true if valid, throws an error with details if not
