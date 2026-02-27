@@ -21,7 +21,8 @@
     "test": "tsx tests/anthropic-client.test.ts && tsx tests/openrouter-client.test.ts && tsx tests/openai-client.test.ts",
     "test:anthropic": "tsx tests/anthropic-client.test.ts",
     "test:openrouter": "tsx tests/openrouter-client.test.ts",
-    "test:openai": "tsx tests/openai-client.test.ts"
+    "test:openai": "tsx tests/openai-client.test.ts",
+    "sync-pricing": "tsx scripts/sync-pricing.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

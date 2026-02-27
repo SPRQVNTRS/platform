@@ -67,6 +67,22 @@ pnpm --filter @sprqvntrs/llm test            # run all e2e tests
 pnpm exec tsx tests/some-test.ts             # run a specific test file
 ```
 
+### Pricing Data (`@sprqvntrs/llm`)
+
+Model pricing is auto-generated from OpenRouter's API. The generated file is `packages/llm/src/pricing-data.json`.
+
+To update pricing data:
+```sh
+pnpm --filter @sprqvntrs/llm sync-pricing
+```
+
+Re-run this when:
+- Adding new models to the package
+- Providers update their pricing
+- Periodically (quarterly) to catch price changes
+
+The script fetches from OpenRouter's `/api/v1/models` endpoint. Models not on OpenRouter (e.g., `text-embedding-3-large`) have manual overrides in `scripts/sync-pricing.ts`.
+
 ## Commit Conventions
 
 Follow conventional commits: `type(scope): description`
