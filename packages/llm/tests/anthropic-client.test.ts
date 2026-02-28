@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { z } from 'zod/v3';
+import { z } from 'zod/v4';
 import { AnthropicClient } from '../src/clients/anthropic-client.js';
 import { LlmError, isTimeoutError } from '../src/utils/errors.js';
 

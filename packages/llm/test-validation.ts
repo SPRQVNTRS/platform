@@ -4,7 +4,7 @@
  */
 
 import { LLM } from './src/llm';
-import { z } from 'zod/v3';
+import { z } from 'zod/v4';
 
 const TestSchema = z.object({
   message: z.string(),
