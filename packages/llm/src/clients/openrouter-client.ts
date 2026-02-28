@@ -1,5 +1,5 @@
 import { OpenRouter } from '@openrouter/sdk';
-import { z } from 'zod/v3';
+import { z } from 'zod/v4';
 import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk, LlmTokenUsage } from '../types/client-interface';
 import { DEFAULT_SYSTEM_PROMPT } from '../models';
 import { calculateUsageCost } from '../pricing';
@@ -10,8 +10,48 @@ import {
   type LlmErrorContext,
 } from '../utils/errors';
 import { resolveRefs } from '../utils/resolve-refs';
-// Use OpenAI SDK's vendored zod-to-json-schema for v3 compatibility
-import { zodToJsonSchema } from 'openai/_vendor/zod-to-json-schema/zodToJsonSchema.mjs';
+
+/**
+ * Post-processes a JSON Schema to enforce strict mode for OpenAI/OpenRouter structured outputs.
+ * Recursively finds all object schemas and adds `additionalProperties: false` plus ensures all
+ * property keys are listed in `required`.
+ */
+function toStrictJsonSchema(schema: Record<string, unknown>): Record<string, unknown> {
+  function processNode(node: unknown): unknown {
+    if (node === null || typeof node !== 'object') {
+      return node;
+    }
+
+    if (Array.isArray(node)) {
+      return node.map(processNode);
+    }
+
+    const obj = node as Record<string, unknown>;
+    const result: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = processNode(value);
+    }
+
+    const isObjectSchema =
+      result['type'] === 'object' || ('properties' in result && result['properties'] !== null);
+
+    if (isObjectSchema) {
+      result['additionalProperties'] = false;
+      const properties = result['properties'];
+      if (properties !== null && typeof properties === 'object' && !Array.isArray(properties)) {
+        const allKeys = Object.keys(properties as Record<string, unknown>);
+        const existingRequired = Array.isArray(result['required']) ? (result['required'] as string[]) : [];
+        const requiredSet = new Set([...existingRequired, ...allKeys]);
+        result['required'] = Array.from(requiredSet);
+      }
+    }
+
+    return result;
+  }
+
+  return processNode(schema) as Record<string, unknown>;
+}
 
 export interface OpenRouterClientConfig extends Omit<BaseLlmClientConfig, 'model'> {
   /**
@@ -95,7 +135,6 @@ export class OpenRouterClient implements LlmClientInterface {
 
   /**
    * Converts a Zod schema to OpenRouter-compatible JSON Schema format
-   * Uses the same zodToJsonSchema approach as OpenAI SDK for v3 compatibility
    *
    * @param schema The Zod schema to convert
    * @param name The name for the schema (used by OpenRouter)
@@ -108,15 +147,7 @@ export class OpenRouterClient implements LlmClientInterface {
     description?: string
   ): { name: string; schema: any; strict: boolean; description?: string } {
     try {
-      // Use OpenAI SDK's vendored zod-to-json-schema for v3 compatibility
-      // This is the same approach OpenAI SDK uses internally
-      let jsonSchema = zodToJsonSchema(schema, {
-        openaiStrictMode: true,
-        name,
-        nameStrategy: 'duplicate-ref',
-        $refStrategy: 'extract-to-root',
-        nullableStrategy: 'property',
-      });
+      let jsonSchema = toStrictJsonSchema(z.toJSONSchema(schema) as Record<string, unknown>);
 
       // Gemini models do not support $ref/$defs in JSON Schema.
       // Inline all references and convert anyOf nullable patterns.
@@ -124,7 +155,7 @@ export class OpenRouterClient implements LlmClientInterface {
         this.logger.log('Resolving $ref/$defs for Gemini model compatibility', {
           model: this.model,
         });
-        jsonSchema = resolveRefs(jsonSchema as Record<string, unknown>);
+        jsonSchema = resolveRefs(jsonSchema);
       }
 
       return {

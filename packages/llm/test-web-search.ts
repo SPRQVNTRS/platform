@@ -3,7 +3,7 @@
  * Test script to verify web search functionality in the LLM package
  */
 
-import { z } from 'zod/v3';
+import { z } from 'zod/v4';
 import { LLM, DEFAULT_MODELS } from './index';
 
 // Test schema for web search results

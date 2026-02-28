@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { z } from 'zod/v3';
+import { z } from 'zod/v4';
 import { OpenRouterClient } from '../src/clients/openrouter-client.js';
 import { LlmError, LlmTimeoutError, isTimeoutError } from '../src/utils/errors.js';
 

@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { z } from 'zod/v3';
+import { z } from 'zod/v4';
 import { OpenAIClient } from '../src/clients/openai-client.js';
 import { LlmTimeoutError, LlmError, isTimeoutError } from '../src/utils/errors.js';
 

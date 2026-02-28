@@ -3,7 +3,7 @@
  * Simple test to verify the refactored LLM implementation
  */
 
-import { z } from 'zod/v3';
+import { z } from 'zod/v4';
 import { LLM } from './src/llm';
 import { OpenAIClient } from './src/clients/openai-client';
 import { AnthropicClient } from './src/clients/anthropic-client';
