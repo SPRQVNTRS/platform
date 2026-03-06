@@ -27,7 +27,7 @@ export const DEFAULT_MODELS = {
    */
   ANTHROPIC_DEFAULT: {
     provider: 'anthropic',
-    model: 'claude-sonnet-4-5-20250929',
+    model: 'claude-sonnet-4-6',
   } as ModelConfig<'anthropic'>,
 
   /**
@@ -35,7 +35,7 @@ export const DEFAULT_MODELS = {
    */
   OPENAI_DEFAULT: {
     provider: 'openai',
-    model: 'gpt-5.2-2025-12-11',
+    model: 'gpt-5.4',
   } as ModelConfig<'openai'>,
 } as const;
 
