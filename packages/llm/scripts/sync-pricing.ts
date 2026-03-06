@@ -49,6 +49,7 @@ const MODEL_MAP: Record<string, string> = {
   // OpenAI
   'gpt-5-nano-2025-08-07': 'openai/gpt-5-nano',
   'gpt-5-mini-2025-08-07': 'openai/gpt-5-mini',
+  'gpt-5.4': 'openai/gpt-5.4',
   'gpt-5.2-2025-12-11': 'openai/gpt-5.2',
   'gpt-4o-mini': 'openai/gpt-4o-mini',
   // Anthropic
