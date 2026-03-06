@@ -1,5 +1,11 @@
 # @sprqvntrs/llm
 
+## 3.5.0
+
+### Minor Changes
+
+- c484f00: feat(llm): bump default models to gpt-5.4 and claude-sonnet-4-6, update OpenAI SDK to 6.27.0, refresh pricing data
+
 ## 3.4.1
 
 ### Patch Changes
