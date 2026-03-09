@@ -1,5 +1,11 @@
 # @sprqvntrs/llm
 
+## 3.5.1
+
+### Patch Changes
+
+- 4a0ac12: fix(llm): normalize Gemini "null" string responses for nullable schema fields
+
 ## 3.5.0
 
 ### Minor Changes
