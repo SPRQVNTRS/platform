@@ -9,6 +9,7 @@ import {
   wrapSdkError,
   type LlmErrorContext,
 } from '../utils/errors';
+import { normalizeNullStrings } from '../utils/normalize-null-strings';
 import { resolveRefs } from '../utils/resolve-refs';
 
 /**
@@ -533,6 +534,14 @@ export class OpenRouterClient implements LlmClientInterface {
         this.logger.log('Parsing and validating structured response');
 
         const parsed = JSON.parse(contentString);
+
+        // Gemini models return the literal string "null" for nullable fields.
+        // Normalize before Zod validation to prevent silent data corruption.
+        if (this.isGeminiModel()) {
+          this.logger.log('Normalizing Gemini null-string values for nullable schema fields');
+          normalizeNullStrings(parsed, schema);
+        }
+
         const validatedContent = schema.parse(parsed);
 
         // Log execution time
