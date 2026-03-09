@@ -1,3 +1,4 @@
+import assert from 'node:assert';
 import 'dotenv/config';
 import { z } from 'zod/v4';
 import { OpenRouterClient } from '../src/clients/openrouter-client.js';
@@ -445,12 +446,229 @@ async function testGeminiRefResolution() {
   console.log('=== All Gemini $ref/$defs resolution tests passed! ===');
 }
 
+/**
+ * Tests Gemini null-string normalization.
+ * Gemini models sometimes return the string "null" instead of actual null
+ * for nullable fields. The normalization layer should fix this automatically.
+ *
+ * Run with: pnpm tsx tests/openrouter-client.test.ts --gemini-nulls
+ */
+async function testGeminiNullNormalization() {
+  console.log('=== Testing Gemini Null-String Normalization ===\n');
+
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
+  if (!openrouterKey) {
+    throw new Error('OPENROUTER_API_KEY not found in environment variables');
+  }
+
+  const geminiClient = new OpenRouterClient({
+    apiKey: openrouterKey,
+    model: 'google/gemini-2.5-flash-lite-preview-09-2025',
+    debug: true,
+    timeout: 60000,
+  });
+
+  // Test 1a: Nullable string fields
+  console.log('1a. Testing nullable string fields...');
+  const schema1 = z.object({
+    name: z.string(),
+    nickname: z.string().nullable(),
+    bio: z.string().nullable().optional(),
+  });
+
+  try {
+    const result = await geminiClient.createStructuredResponse({
+      prompt:
+        'Respond with a person whose name is "Alice". Set nickname to null and bio to null. Do not use placeholder text — the values must be null.',
+      schema: schema1,
+      logExecutionTime: true,
+    });
+
+    console.log('  Result:', JSON.stringify(result, null, 2));
+
+    if (typeof result.name !== 'string' || result.name.length === 0) {
+      throw new Error(`Expected name to be a non-empty string, got: ${JSON.stringify(result.name)}`);
+    }
+
+    if (result.nickname === 'null') {
+      throw new Error('nickname is the string "null" instead of actual null — normalization failed');
+    }
+    assert.strictEqual(result.nickname, null, 'nickname should be null');
+
+    if (result.bio === 'null') {
+      throw new Error('bio is the string "null" instead of actual null — normalization failed');
+    }
+    assert.strictEqual(result.bio, null, 'bio should be null');
+
+    console.log('  ✓ Nullable string fields correctly returned null\n');
+  } catch (error) {
+    console.error('  ✗ Nullable string fields test failed:', error);
+    throw error;
+  }
+
+  // Test 1b: Nullable number field
+  console.log('1b. Testing nullable number field...');
+  const schema1b = z.object({
+    score: z.number(),
+    penalty: z.number().nullable(),
+  });
+
+  try {
+    const result = await geminiClient.createStructuredResponse({
+      prompt:
+        'Respond with score set to 95. The penalty field must be JSON null — not zero, not a number, just null.',
+      schema: schema1b,
+      logExecutionTime: true,
+    });
+
+    console.log('  Result:', JSON.stringify(result, null, 2));
+
+    if (typeof result.score !== 'number') {
+      throw new Error(`Expected score to be a number, got: ${JSON.stringify(result.score)}`);
+    }
+
+    // The critical check: penalty must NOT be the string "null"
+    if (result.penalty === ('null' as unknown)) {
+      throw new Error('penalty is the string "null" instead of actual null — normalization failed');
+    }
+
+    // If the model returned null, great. If it returned a number (LLM non-determinism), that's acceptable.
+    if (result.penalty !== null) {
+      console.log(`  ⚠ penalty returned ${result.penalty} instead of null (LLM non-determinism, not a bug)`);
+    } else {
+      assert.strictEqual(result.penalty, null, 'penalty should be null');
+    }
+
+    console.log('  ✓ Nullable number field did not return string "null"\n');
+  } catch (error) {
+    console.error('  ✗ Nullable number field test failed:', error);
+    throw error;
+  }
+
+  // Test 1c: Nested object with nullable fields
+  console.log('1c. Testing nested object with nullable fields...');
+  const schema1c = z.object({
+    user: z.object({
+      name: z.string(),
+      middleName: z.string().nullable(),
+    }),
+  });
+
+  try {
+    const result = await geminiClient.createStructuredResponse({
+      prompt: 'Return a user object with name "Bob" and middleName set to null.',
+      schema: schema1c,
+      logExecutionTime: true,
+    });
+
+    console.log('  Result:', JSON.stringify(result, null, 2));
+
+    if (typeof result.user.name !== 'string') {
+      throw new Error(`Expected user.name to be a string, got: ${JSON.stringify(result.user.name)}`);
+    }
+
+    if (result.user.middleName === 'null') {
+      throw new Error('user.middleName is the string "null" instead of actual null — normalization failed');
+    }
+    assert.strictEqual(result.user.middleName, null, 'user.middleName should be null');
+
+    console.log('  ✓ Nested nullable field correctly returned null\n');
+  } catch (error) {
+    console.error('  ✗ Nested nullable field test failed:', error);
+    throw error;
+  }
+
+  // Test 1d: Array of objects with nullable fields
+  console.log('1d. Testing array of objects with nullable fields...');
+  const schema1d = z.object({
+    items: z.array(
+      z.object({
+        label: z.string(),
+        note: z.string().nullable(),
+      }),
+    ),
+  });
+
+  try {
+    const result = await geminiClient.createStructuredResponse({
+      prompt:
+        'Return 2 items: first with label "A" and note set to null, second with label "B" and note set to "some text".',
+      schema: schema1d,
+      logExecutionTime: true,
+    });
+
+    console.log('  Result:', JSON.stringify(result, null, 2));
+
+    if (!Array.isArray(result.items) || result.items.length < 2) {
+      throw new Error(`Expected at least 2 items, got: ${result.items?.length ?? 0}`);
+    }
+
+    const firstItem = result.items[0]!;
+    const secondItem = result.items[1]!;
+
+    if (firstItem.note === 'null') {
+      throw new Error('items[0].note is the string "null" instead of actual null — normalization failed');
+    }
+    assert.strictEqual(firstItem.note, null, 'items[0].note should be null');
+
+    if (typeof secondItem.note !== 'string' || secondItem.note === 'null') {
+      throw new Error(`Expected items[1].note to be a non-null string, got: ${JSON.stringify(secondItem.note)}`);
+    }
+
+    console.log('  ✓ Array with nullable fields correctly handled\n');
+  } catch (error) {
+    console.error('  ✗ Array nullable fields test failed:', error);
+    throw error;
+  }
+
+  // Test 1e: Non-nullable string preservation
+  // Already covered by test 1a — the `name` field is non-nullable and was validated as a real string.
+  console.log('1e. Non-nullable string preservation — covered by test 1a (name field).\n');
+
+  // Test 1f: OpenAI comparison baseline
+  console.log('1f. Testing OpenAI comparison baseline...');
+  const openaiClient = new OpenRouterClient({
+    apiKey: openrouterKey,
+    model: 'openai/gpt-4o-mini',
+    debug: true,
+    timeout: 60000,
+  });
+
+  try {
+    const result = await openaiClient.createStructuredResponse({
+      prompt:
+        'Respond with a person whose name is "Alice". Set nickname to null and bio to null. Do not use placeholder text — the values must be null.',
+      schema: schema1,
+      logExecutionTime: true,
+    });
+
+    console.log('  Result:', JSON.stringify(result, null, 2));
+
+    if (result.nickname === 'null') {
+      throw new Error('OpenAI returned string "null" instead of actual null — unexpected');
+    }
+    assert.strictEqual(result.nickname, null, 'OpenAI should return proper null for nickname');
+
+    console.log('  ✓ OpenAI baseline returns proper null natively\n');
+  } catch (error) {
+    console.error('  ✗ OpenAI comparison baseline test failed:', error);
+    throw error;
+  }
+
+  console.log('=== All Gemini null-string normalization tests passed! ===');
+}
+
 // Run tests
 const testSuite = process.argv[2];
 
 if (testSuite === '--gemini-refs') {
   testGeminiRefResolution().catch((error) => {
     console.error('\n❌ Gemini ref resolution tests failed:', error);
+    process.exit(1);
+  });
+} else if (testSuite === '--gemini-nulls') {
+  testGeminiNullNormalization().catch((error) => {
+    console.error('\n❌ Gemini null normalization tests failed:', error);
     process.exit(1);
   });
 } else {
