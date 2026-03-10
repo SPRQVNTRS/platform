@@ -7,6 +7,7 @@ import { DebugLogger } from '../utils/debug';
 import {
   generateRequestId,
   wrapSdkError,
+  LlmOutputTruncatedError,
   type LlmErrorContext,
 } from '../utils/errors';
 import { normalizeNullStrings } from '../utils/normalize-null-strings';
@@ -310,6 +311,7 @@ export class OpenRouterClient implements LlmClientInterface {
 
       let accumulatedText = '';
       let usage: StreamChunk['usage'] | undefined;
+      let finishReason: string | undefined;
 
       for await (const chunk of stream as any) {
         const content = chunk.choices?.[0]?.delta?.content;
@@ -323,6 +325,12 @@ export class OpenRouterClient implements LlmClientInterface {
           };
         }
 
+        // Capture finish_reason from chunks (present in the final chunk)
+        const chunkFinishReason = chunk.choices?.[0]?.finish_reason;
+        if (chunkFinishReason) {
+          finishReason = chunkFinishReason;
+        }
+
         // Capture usage from chunk when present (OpenRouter includes it in final chunk)
         // Note: OpenRouter SDK returns camelCase properties (promptTokens, completionTokens, totalTokens)
         if (chunk.usage) {
@@ -334,9 +342,9 @@ export class OpenRouterClient implements LlmClientInterface {
         }
       }
 
-      // Final chunk with usage
+      // Final chunk with usage and finish reason
       const elapsedMs = Date.now() - startTime;
-      this.logger.log(`Streaming completed in ${elapsedMs}ms`);
+      this.logger.log(`Streaming completed in ${elapsedMs}ms`, { finishReason });
       if (usage) {
         this.logger.logUsage(usage);
       }
@@ -346,6 +354,7 @@ export class OpenRouterClient implements LlmClientInterface {
         isComplete: true,
         accumulatedText,
         usage,
+        finishReason,
       };
     } catch (error) {
       const elapsedMs = Date.now() - startTime;
@@ -471,6 +480,7 @@ export class OpenRouterClient implements LlmClientInterface {
           this.logger.log('Using streaming generation with native structured outputs');
           let accumulatedText = '';
           let lastLoggedLength = 0;
+          let finishReason: string | undefined;
 
           for await (const chunk of this.createStreamingResponseInternal(prompt, responseFormat, effectiveTimeout, systemPrompt)) {
             if (!chunk.isComplete) {
@@ -483,7 +493,10 @@ export class OpenRouterClient implements LlmClientInterface {
               }
             }
 
-            // Capture usage from the final chunk
+            // Capture finish reason and usage from the final chunk
+            if (chunk.finishReason) {
+              finishReason = chunk.finishReason;
+            }
             if (chunk.usage) {
               const promptTokens = chunk.usage.promptTokens ?? 0;
               const completionTokens = chunk.usage.completionTokens ?? 0;
@@ -498,6 +511,27 @@ export class OpenRouterClient implements LlmClientInterface {
           }
 
           this.logger.log(`Streaming completed, total: ${accumulatedText.length} chars`);
+
+          // Check for output truncation before attempting to parse
+          if (finishReason === 'length') {
+            throw new LlmOutputTruncatedError(
+              {
+                clientType: 'openrouter',
+                model: this.model,
+                elapsedMs: Date.now() - startTime,
+                timeoutMs: effectiveTimeout,
+                operation: 'createStructuredResponse',
+                requestId,
+                metadata: {
+                  promptSize: prompt.length,
+                  contentLength: accumulatedText.length,
+                  finishReason,
+                },
+              },
+              accumulatedText.length,
+            );
+          }
+
           contentString = accumulatedText;
         } else {
           // Non-streaming path with structured outputs
@@ -513,7 +547,8 @@ export class OpenRouterClient implements LlmClientInterface {
             },
           });
 
-          const rawUsage = (response as any).usage;
+          const typedResponse = response as any;
+          const rawUsage = typedResponse.usage;
           if (rawUsage) {
             const promptTokens = rawUsage.prompt_tokens ?? rawUsage.promptTokens ?? 0;
             const completionTokens = rawUsage.completion_tokens ?? rawUsage.completionTokens ?? 0;
@@ -526,6 +561,29 @@ export class OpenRouterClient implements LlmClientInterface {
             };
           }
           this.logger.logUsage(rawUsage || {});
+
+          // Check for output truncation before attempting to parse
+          const finishReason = typedResponse.choices?.[0]?.finish_reason;
+          if (finishReason === 'length') {
+            const content = typedResponse.choices?.[0]?.message?.content ?? '';
+            throw new LlmOutputTruncatedError(
+              {
+                clientType: 'openrouter',
+                model: this.model,
+                elapsedMs: Date.now() - startTime,
+                timeoutMs: effectiveTimeout,
+                operation: 'createStructuredResponse',
+                requestId,
+                metadata: {
+                  promptSize: prompt.length,
+                  contentLength: typeof content === 'string' ? content.length : 0,
+                  finishReason,
+                },
+              },
+              typeof content === 'string' ? content.length : 0,
+            );
+          }
+
           contentString = this.extractContentFromResponse(response);
         }
 
