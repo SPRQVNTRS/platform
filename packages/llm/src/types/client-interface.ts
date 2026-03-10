@@ -85,6 +85,12 @@ export interface StreamChunk {
     completionTokens?: number;
     totalTokens?: number;
   };
+
+  /**
+   * The finish reason from the API (only present in final chunk)
+   * Common values: 'stop' (normal), 'length' (truncated), 'content_filter'
+   */
+  finishReason?: string;
 }
 
 /**

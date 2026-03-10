@@ -22,6 +22,7 @@
     "test:anthropic": "tsx tests/anthropic-client.test.ts",
     "test:openrouter": "tsx tests/openrouter-client.test.ts",
     "test:openai": "tsx tests/openai-client.test.ts",
+    "test:truncation": "tsx tests/output-truncated-error.test.ts",
     "sync-pricing": "tsx scripts/sync-pricing.ts"
   },
   "dependencies": {

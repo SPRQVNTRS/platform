@@ -168,6 +168,22 @@ export class LlmApiError extends LlmError {
 }
 
 /**
+ * Error thrown when model output is truncated due to token limits
+ */
+export class LlmOutputTruncatedError extends LlmError {
+  public readonly contentLength: number;
+
+  constructor(context: LlmErrorContext, contentLength: number) {
+    const message =
+      `Model output was truncated (finish_reason: length). The ${contentLength}-char response exceeded the model's ` +
+      'maximum output token limit. Consider reducing input size or using a model with higher output limits.';
+    super(message, context);
+    this.name = 'LlmOutputTruncatedError';
+    this.contentLength = contentLength;
+  }
+}
+
+/**
  * Error thrown when configuration is invalid
  */
 export class LlmConfigurationError extends LlmError {
