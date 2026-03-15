@@ -193,7 +193,7 @@ export function createBoss(config: PgBossConfig): PgBoss {
     // Maintenance
     maintenanceIntervalSeconds: fullConfig.maintenanceIntervalSeconds,
     // Monitoring
-    monitorStateIntervalSeconds: fullConfig.debug ? 30 : undefined,
+    ...(fullConfig.debug && { monitorStateIntervalSeconds: 30 }),
   });
 }
 
