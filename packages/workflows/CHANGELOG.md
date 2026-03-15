@@ -1,5 +1,11 @@
 # @sprqvntrs/workflows
 
+## 0.2.4
+
+### Patch Changes
+
+- 3c544ee: fix(workflows): avoid passing undefined monitorStateIntervalSeconds to pg-boss
+
 ## 0.2.3
 
 ### Patch Changes
