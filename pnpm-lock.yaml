@@ -23,6 +23,31 @@ importers:
 
   images/postgres: {}
 
+  packages/api-football:
+    dependencies:
+      qs:
+        specifier: ^6.12.1
+        version: 6.14.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.18.10
+      '@types/qs':
+        specifier: ^6.9.15
+        version: 6.14.0
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      tsx:
+        specifier: ^4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6)
+
   packages/aws:
     dependencies:
       '@aws-sdk/client-dynamodb':
