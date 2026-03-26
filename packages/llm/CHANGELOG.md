@@ -1,5 +1,13 @@
 # @sprqvntrs/llm
 
+## 3.6.0
+
+### Minor Changes
+
+- 2fa51db: feat(llm): add LlmJsonParseError for silent JSON truncation detection
+
+  New `LlmJsonParseError` class surfaces when models return invalid JSON despite `finish_reason: 'stop'`. Includes raw content, content length, and finish reason metadata for debugging. Retries are skipped for these errors since the same prompt produces the same truncation.
+
 ## 3.5.2
 
 ### Patch Changes
