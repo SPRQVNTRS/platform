@@ -33,6 +33,7 @@ export {
   LlmApiError,
   LlmConfigurationError,
   LlmOutputTruncatedError,
+  LlmJsonParseError,
   generateRequestId,
   isTimeoutError,
   wrapSdkError,

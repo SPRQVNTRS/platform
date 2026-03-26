@@ -184,6 +184,27 @@ export class LlmOutputTruncatedError extends LlmError {
 }
 
 /**
+ * Error thrown when model returns invalid JSON despite finish_reason: 'stop'.
+ * This typically indicates silent truncation where the model cut off mid-response
+ * without signaling via finish_reason: 'length'.
+ */
+export class LlmJsonParseError extends LlmError {
+  public readonly rawContent: string;
+  public readonly parseError: SyntaxError;
+
+  constructor(context: LlmErrorContext, rawContent: string, parseError: SyntaxError) {
+    super(
+      `Model returned invalid JSON (${rawContent.length} chars, ` +
+        `finish_reason: ${context.metadata?.finishReason ?? 'unknown'}): ${parseError.message}`,
+      context,
+    );
+    this.name = 'LlmJsonParseError';
+    this.rawContent = rawContent;
+    this.parseError = parseError;
+  }
+}
+
+/**
  * Error thrown when configuration is invalid
  */
 export class LlmConfigurationError extends LlmError {
