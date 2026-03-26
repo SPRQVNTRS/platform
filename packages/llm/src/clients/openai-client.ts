@@ -8,6 +8,7 @@ import { DebugLogger } from '../utils/debug';
 import {
   generateRequestId,
   wrapSdkError,
+  isRetryableError,
   type LlmErrorContext,
 } from '../utils/errors';
 
@@ -271,7 +272,7 @@ export class OpenAIClient implements LlmClientInterface {
     schema,
     formatGuidance,
     reasoningEffort,
-    maxAttempts = 1,
+    maxAttempts = 3,
     logExecutionTime = false,
     responseInstructions,
     useWebSearch = false,
@@ -464,15 +465,20 @@ export class OpenAIClient implements LlmClientInterface {
         };
 
         const wrappedError = wrapSdkError(error, context);
+        const retryable = isRetryableError(wrappedError);
 
         this.logger.log(`Failed attempt ${attempts}/${maxAttempts}`, {
           error: wrappedError.message,
+          errorType: wrappedError.name,
+          retryable,
           elapsedMs,
+          ...(wrappedError.context.metadata?.errorCode && { errorCode: wrappedError.context.metadata.errorCode }),
+          ...(wrappedError.context.metadata?.providerRequestId && { providerRequestId: wrappedError.context.metadata.providerRequestId }),
         });
 
-        if (attempts === maxAttempts) {
+        if (!retryable || attempts === maxAttempts) {
           this.logger.logError(
-            'createStructuredResponse failed after all attempts',
+            `createStructuredResponse failed${retryable ? ' after all attempts' : ' (non-retryable)'}`,
             wrappedError,
             wrappedError.context,
           );
@@ -480,11 +486,9 @@ export class OpenAIClient implements LlmClientInterface {
         }
 
         // Wait before retrying (exponential backoff)
-        if (attempts < maxAttempts) {
-          const backoffMs = Math.min(1000 * Math.pow(2, attempts - 1), 10000);
-          this.logger.log(`Retrying after ${backoffMs}ms backoff...`);
-          await new Promise((resolve) => setTimeout(resolve, backoffMs));
-        }
+        const backoffMs = Math.min(1000 * Math.pow(2, attempts - 1), 10000);
+        this.logger.log(`Retrying after ${backoffMs}ms backoff (attempt ${attempts + 1}/${maxAttempts})...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
       }
     }
 

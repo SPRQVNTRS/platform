@@ -9,6 +9,7 @@ import { DebugLogger } from '../utils/debug';
 import {
   generateRequestId,
   wrapSdkError,
+  isRetryableError,
   type LlmErrorContext,
 } from '../utils/errors';
 
@@ -352,7 +353,7 @@ export class AnthropicClient implements LlmClientInterface {
     schema,
     formatGuidance,
     reasoningEffort,
-    maxAttempts = 1,
+    maxAttempts = 3,
     logExecutionTime = false,
     responseInstructions,
     useWebSearch = false,
@@ -387,179 +388,210 @@ export class AnthropicClient implements LlmClientInterface {
     const effectiveTimeout = timeout ?? this.timeout;
     this._lastUsage = null;
     const requestId = generateRequestId();
-    const startTime = Date.now();
+    let attempts = 0;
+    let lastError: unknown;
 
-    this.logger.log('createStructuredResponse called', {
-      modelUsed: this.model,
-      reasoningEffort,
-      stream,
-      requestId,
-      timeout: effectiveTimeout,
-    });
+    // Build tools array if web search is enabled
+    const tools = useWebSearch ? [WEB_SEARCH_TOOLS.ANTHROPIC] : undefined;
 
-    try {
-      // Build tools array if web search is enabled
-      const tools = useWebSearch ? [WEB_SEARCH_TOOLS.ANTHROPIC] : undefined;
+    // Get thinking configuration based on reasoning effort
+    const thinking = this.getThinkingConfig(reasoningEffort);
 
-      // Get thinking configuration based on reasoning effort
-      const thinking = this.getThinkingConfig(reasoningEffort);
+    // Calculate max_tokens: must be greater than thinking budget
+    // If thinking is enabled, we need max_tokens > budget_tokens
+    // Otherwise, use the default ANTHROPIC_MAX_TOKENS
+    const maxTokens = thinking ? Math.max(ANTHROPIC_MAX_TOKENS, thinking.budget_tokens + 4096) : ANTHROPIC_MAX_TOKENS;
 
-      // Calculate max_tokens: must be greater than thinking budget
-      // If thinking is enabled, we need max_tokens > budget_tokens
-      // Otherwise, use the default ANTHROPIC_MAX_TOKENS
-      const maxTokens = thinking ? Math.max(ANTHROPIC_MAX_TOKENS, thinking.budget_tokens + 4096) : ANTHROPIC_MAX_TOKENS;
+    // Create a client with the effective timeout if different from instance timeout
+    const client = effectiveTimeout !== this.timeout
+      ? new Anthropic({
+          apiKey: this.client.apiKey,
+          timeout: effectiveTimeout,
+          maxRetries: this.maxRetries,
+        })
+      : this.client;
 
-      // Create a client with the effective timeout if different from instance timeout
-      const client = effectiveTimeout !== this.timeout
-        ? new Anthropic({
-            apiKey: this.client.apiKey,
-            timeout: effectiveTimeout,
-            maxRetries: this.maxRetries,
-          })
-        : this.client;
+    while (attempts < maxAttempts) {
+      attempts++;
+      const startTime = Date.now();
 
-      let textContent: string;
-
-      if (stream) {
-        // Step 1: Generate content with Anthropic using streaming for observability
-        this.logger.log('Using streaming generation for observability');
-        let accumulatedText = '';
-        let lastLoggedLength = 0;
-
-        const messageStream = client.messages.stream({
-          model: this.model,
-          max_tokens: maxTokens,
-          system: DEFAULT_SYSTEM_PROMPT,
-          messages: [
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-          ...(tools && { tools }),
-          ...(thinking && { thinking }),
+      try {
+        this.logger.log('createStructuredResponse called', {
+          modelUsed: this.model,
+          reasoningEffort,
+          stream,
+          attempt: `${attempts}/${maxAttempts}`,
+          requestId,
+          timeout: effectiveTimeout,
         });
 
-        for await (const chunk of messageStream) {
-          if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-            const text = chunk.delta.text;
-            accumulatedText += text;
+        let textContent: string;
 
-            // Log progress every 100 characters for observability
-            if (accumulatedText.length - lastLoggedLength >= 100) {
-              this.logger.log(`Streaming progress: ${accumulatedText.length} chars`);
-              lastLoggedLength = accumulatedText.length;
+        if (stream) {
+          // Step 1: Generate content with Anthropic using streaming for observability
+          this.logger.log('Using streaming generation for observability');
+          let accumulatedText = '';
+          let lastLoggedLength = 0;
+
+          const messageStream = client.messages.stream({
+            model: this.model,
+            max_tokens: maxTokens,
+            system: DEFAULT_SYSTEM_PROMPT,
+            messages: [
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
+            ...(tools && { tools }),
+            ...(thinking && { thinking }),
+          });
+
+          for await (const chunk of messageStream) {
+            if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+              const text = chunk.delta.text;
+              accumulatedText += text;
+
+              // Log progress every 100 characters for observability
+              if (accumulatedText.length - lastLoggedLength >= 100) {
+                this.logger.log(`Streaming progress: ${accumulatedText.length} chars`);
+                lastLoggedLength = accumulatedText.length;
+              }
             }
+          }
+
+          this.logger.log(`Streaming completed, total: ${accumulatedText.length} chars`);
+          textContent = accumulatedText;
+
+          // Capture usage from the stream's final message
+          const finalMessage = await messageStream.finalMessage();
+          if (finalMessage.usage) {
+            const promptTokens = finalMessage.usage.input_tokens ?? 0;
+            const completionTokens = finalMessage.usage.output_tokens ?? 0;
+            const cachedTokens: number | undefined = (finalMessage.usage as any).cache_read_input_tokens ?? undefined;
+            this._lastUsage = {
+              promptTokens,
+              completionTokens,
+              totalTokens: promptTokens + completionTokens,
+              cachedTokens,
+              model: this.model,
+              cost: calculateUsageCost(this.model, promptTokens, completionTokens, cachedTokens),
+            };
+          }
+        } else {
+          // Non-streaming path
+          const anthropicResponse = await client.messages.create({
+            model: this.model,
+            max_tokens: maxTokens,
+            system: DEFAULT_SYSTEM_PROMPT,
+            messages: [
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
+            ...(tools && { tools }),
+            ...(thinking && { thinking }),
+          });
+
+          // Extract text content - when thinking mode is enabled, response may have multiple content blocks
+          // Find the text block (skip thinking blocks)
+          const textBlock = anthropicResponse.content.find((block) => block.type === 'text');
+          if (!textBlock || textBlock.type !== 'text') {
+            // Log the actual response structure for debugging
+            this.logger.logError('Unexpected response structure', undefined, {
+              contentBlocks: anthropicResponse.content.map((block) => ({ type: block.type })),
+            });
+            throw new Error('Expected text response from Anthropic');
+          }
+
+          textContent = textBlock.text;
+
+          // Capture usage from the non-streaming response
+          if (anthropicResponse.usage) {
+            const promptTokens = anthropicResponse.usage.input_tokens ?? 0;
+            const completionTokens = anthropicResponse.usage.output_tokens ?? 0;
+            const cachedTokens: number | undefined = (anthropicResponse.usage as any).cache_read_input_tokens ?? undefined;
+            this._lastUsage = {
+              promptTokens,
+              completionTokens,
+              totalTokens: promptTokens + completionTokens,
+              cachedTokens,
+              model: this.model,
+              cost: calculateUsageCost(this.model, promptTokens, completionTokens, cachedTokens),
+            };
           }
         }
 
-        this.logger.log(`Streaming completed, total: ${accumulatedText.length} chars`);
-        textContent = accumulatedText;
+        this.logger.logResponsePreview(textContent);
 
-        // Capture usage from the stream's final message
-        const finalMessage = await messageStream.finalMessage();
-        if (finalMessage.usage) {
-          const promptTokens = finalMessage.usage.input_tokens ?? 0;
-          const completionTokens = finalMessage.usage.output_tokens ?? 0;
-          const cachedTokens: number | undefined = (finalMessage.usage as any).cache_read_input_tokens ?? undefined;
-          this._lastUsage = {
-            promptTokens,
-            completionTokens,
-            totalTokens: promptTokens + completionTokens,
-            cachedTokens,
-            model: this.model,
-            cost: calculateUsageCost(this.model, promptTokens, completionTokens, cachedTokens),
-          };
-        }
-      } else {
-        // Non-streaming path
-        const anthropicResponse = await client.messages.create({
-          model: this.model,
-          max_tokens: maxTokens,
-          system: DEFAULT_SYSTEM_PROMPT,
-          messages: [
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-          ...(tools && { tools }),
-          ...(thinking && { thinking }),
+        // Step 2: Use OpenAI to format the response into the required schema
+        const formattedResponse = await this.formatterClient.createStructuredResponse({
+          prompt: textContent,
+          schema,
+          formatGuidance: effectiveFormatGuidance,
+          reasoningEffort: 'low', // Formatting doesn't need high reasoning
+          maxAttempts, // Pass through retry logic to formatter
+          logExecutionTime: false, // We'll log our own execution time
+          stream: false, // Don't stream the formatting step, only the generation
         });
 
-        // Extract text content - when thinking mode is enabled, response may have multiple content blocks
-        // Find the text block (skip thinking blocks)
-        const textBlock = anthropicResponse.content.find((block) => block.type === 'text');
-        if (!textBlock || textBlock.type !== 'text') {
-          // Log the actual response structure for debugging
-          this.logger.logError('Unexpected response structure', undefined, {
-            contentBlocks: anthropicResponse.content.map((block) => ({ type: block.type })),
-          });
-          throw new Error('Expected text response from Anthropic');
+        // Log execution time
+        const executionTime = Date.now() - startTime;
+        if (logExecutionTime || this.logger.isEnabled()) {
+          this.logger.logExecutionTime('createStructuredResponse', executionTime);
         }
 
-        textContent = textBlock.text;
+        return formattedResponse;
+      } catch (error) {
+        lastError = error;
+        const elapsedMs = Date.now() - startTime;
 
-        // Capture usage from the non-streaming response
-        if (anthropicResponse.usage) {
-          const promptTokens = anthropicResponse.usage.input_tokens ?? 0;
-          const completionTokens = anthropicResponse.usage.output_tokens ?? 0;
-          const cachedTokens: number | undefined = (anthropicResponse.usage as any).cache_read_input_tokens ?? undefined;
-          this._lastUsage = {
-            promptTokens,
-            completionTokens,
-            totalTokens: promptTokens + completionTokens,
-            cachedTokens,
-            model: this.model,
-            cost: calculateUsageCost(this.model, promptTokens, completionTokens, cachedTokens),
-          };
+        const context: LlmErrorContext = {
+          clientType: 'anthropic',
+          model: this.model,
+          elapsedMs,
+          timeoutMs: effectiveTimeout,
+          operation: 'createStructuredResponse',
+          requestId,
+          metadata: {
+            promptSize: prompt.length,
+            schemaComplexity: typeof schema,
+            attempt: attempts,
+            maxAttempts,
+            reasoningEffort,
+          },
+        };
+
+        const wrappedError = wrapSdkError(error, context);
+        const retryable = isRetryableError(wrappedError);
+
+        this.logger.log(`Failed attempt ${attempts}/${maxAttempts}`, {
+          error: wrappedError.message,
+          errorType: wrappedError.name,
+          retryable,
+          elapsedMs,
+          ...(wrappedError.context.metadata?.errorCode && { errorCode: wrappedError.context.metadata.errorCode }),
+          ...(wrappedError.context.metadata?.providerRequestId && { providerRequestId: wrappedError.context.metadata.providerRequestId }),
+        });
+
+        if (!retryable || attempts === maxAttempts) {
+          this.logger.logError(
+            `createStructuredResponse failed${retryable ? ' after all attempts' : ' (non-retryable)'}`,
+            wrappedError,
+            wrappedError.context,
+          );
+          throw wrappedError;
         }
+
+        // Wait before retrying (exponential backoff)
+        const backoffMs = Math.min(1000 * Math.pow(2, attempts - 1), 10000);
+        this.logger.log(`Retrying after ${backoffMs}ms backoff (attempt ${attempts + 1}/${maxAttempts})...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
       }
-
-      this.logger.logResponsePreview(textContent);
-
-      // Step 2: Use OpenAI to format the response into the required schema
-      const formattedResponse = await this.formatterClient.createStructuredResponse({
-        prompt: textContent,
-        schema,
-        formatGuidance: effectiveFormatGuidance,
-        reasoningEffort: 'low', // Formatting doesn't need high reasoning
-        maxAttempts, // Pass through retry logic to formatter
-        logExecutionTime: false, // We'll log our own execution time
-        stream: false, // Don't stream the formatting step, only the generation
-      });
-
-      // Log execution time
-      const executionTime = Date.now() - startTime;
-      if (logExecutionTime || this.logger.isEnabled()) {
-        this.logger.logExecutionTime('createStructuredResponse', executionTime);
-      }
-
-      return formattedResponse;
-    } catch (error) {
-      const elapsedMs = Date.now() - startTime;
-      const context: LlmErrorContext = {
-        clientType: 'anthropic',
-        model: this.model,
-        elapsedMs,
-        timeoutMs: effectiveTimeout,
-        operation: 'createStructuredResponse',
-        requestId,
-        metadata: {
-          promptSize: prompt.length,
-          schemaComplexity: typeof schema,
-          reasoningEffort,
-        },
-      };
-
-      const wrappedError = wrapSdkError(error, context);
-      this.logger.logError(
-        'createStructuredResponse failed',
-        wrappedError,
-        wrappedError.context,
-      );
-      throw wrappedError;
     }
+
+    throw lastError || new Error('Failed to get structured response from LLM');
   }
 
   /**

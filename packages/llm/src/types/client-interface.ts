@@ -179,7 +179,7 @@ export interface LlmClientInterface {
    * @param options.schema The Zod schema to validate the response against
    * @param options.formatGuidance Optional guidance for formatting the response
    * @param options.reasoningEffort Normalized reasoning effort level ('low' | 'medium' | 'high')
-   * @param options.maxAttempts Maximum number of retry attempts (default: 1, no retries)
+   * @param options.maxAttempts Maximum number of retry attempts (default: 3)
    * @param options.logExecutionTime Whether to log execution time warnings (default: false)
    * @param options.responseInstructions Additional instructions to append to the prompt (deprecated, use formatGuidance)
    * @param options.useWebSearch Whether to enable web search for this request (default: false)

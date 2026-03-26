@@ -36,6 +36,7 @@ export {
   LlmJsonParseError,
   generateRequestId,
   isTimeoutError,
+  isRetryableError,
   wrapSdkError,
 } from './src/utils/errors';
 export type { LlmErrorContext } from './src/utils/errors';
