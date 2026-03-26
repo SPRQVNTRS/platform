@@ -7,6 +7,7 @@ import { DebugLogger } from '../utils/debug';
 import {
   generateRequestId,
   wrapSdkError,
+  isRetryableError,
   LlmOutputTruncatedError,
   LlmJsonParseError,
   type LlmErrorContext,
@@ -402,7 +403,7 @@ export class OpenRouterClient implements LlmClientInterface {
     schema,
     formatGuidance,
     reasoningEffort = 'low',
-    maxAttempts = 1,
+    maxAttempts = 3,
     logExecutionTime = false,
     responseInstructions,
     stream = true,
@@ -656,36 +657,33 @@ export class OpenRouterClient implements LlmClientInterface {
         };
 
         const wrappedError = wrapSdkError(error, context);
+        const retryable = isRetryableError(error instanceof LlmJsonParseError ? error : wrappedError);
 
         this.logger.log(`Failed attempt ${attempts}/${maxAttempts}`, {
           error: wrappedError.message,
+          errorType: wrappedError.name,
+          retryable,
           elapsedMs,
+          ...(wrappedError.context.metadata?.errorCode && { errorCode: wrappedError.context.metadata.errorCode }),
+          ...(wrappedError.context.metadata?.providerRequestId && { providerRequestId: wrappedError.context.metadata.providerRequestId }),
         });
 
-        if (error instanceof LlmJsonParseError) {
+        if (!retryable || attempts === maxAttempts) {
+          const reason = !retryable ? ' (non-retryable)' : ' after all attempts';
           this.logger.logError(
-            'createStructuredResponse: model returned invalid JSON — not retrying (likely silent truncation)',
+            `createStructuredResponse failed${reason}`,
             wrappedError,
             wrappedError.context,
           );
-          throw error;
-        }
-
-        if (attempts === maxAttempts) {
-          this.logger.logError(
-            'createStructuredResponse failed after all attempts',
-            wrappedError,
-            wrappedError.context,
-          );
-          throw wrappedError;
+          throw error instanceof LlmJsonParseError || error instanceof LlmOutputTruncatedError
+            ? error
+            : wrappedError;
         }
 
         // Wait before retrying (exponential backoff)
-        if (attempts < maxAttempts) {
-          const backoffMs = Math.min(1000 * Math.pow(2, attempts - 1), 10000);
-          this.logger.log(`Retrying after ${backoffMs}ms backoff...`);
-          await new Promise((resolve) => setTimeout(resolve, backoffMs));
-        }
+        const backoffMs = Math.min(1000 * Math.pow(2, attempts - 1), 10000);
+        this.logger.log(`Retrying after ${backoffMs}ms backoff (attempt ${attempts + 1}/${maxAttempts})...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
       }
     }
 

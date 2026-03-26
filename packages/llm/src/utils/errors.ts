@@ -245,13 +245,37 @@ export function isTimeoutError(error: unknown): boolean {
 }
 
 /**
- * Helper function to wrap SDK errors with enhanced context
+ * Helper function to wrap SDK errors with enhanced context.
+ * Extracts additional information from SDK error objects (status codes, error types,
+ * request IDs) and creates the appropriate LlmError subclass.
  */
 export function wrapSdkError(
   error: unknown,
   context: LlmErrorContext,
 ): LlmError {
+  // If already wrapped, return as-is
+  if (error instanceof LlmError) {
+    return error;
+  }
+
   const originalError = error instanceof Error ? error : new Error(String(error));
+
+  // Extract additional context from SDK errors (OpenAI, Anthropic SDKs)
+  const errorCode = (error as any)?.code as string | undefined;
+  const errorType = (error as any)?.type || (error as any)?.error?.type;
+  const providerRequestId =
+    (error as any)?.headers?.['x-request-id'] ||
+    (error as any)?.headers?.get?.('x-request-id');
+
+  // Enrich metadata with SDK error details
+  if (errorCode || errorType || providerRequestId) {
+    context.metadata = {
+      ...context.metadata,
+      ...(errorCode && { errorCode }),
+      ...(errorType && { errorType }),
+      ...(providerRequestId && { providerRequestId }),
+    };
+  }
 
   // Detect timeout errors
   if (isTimeoutError(error)) {
@@ -271,4 +295,33 @@ export function wrapSdkError(
 
   // Default to generic LlmError
   return new LlmError(originalError.message, context, originalError);
+}
+
+/**
+ * Determines whether an error is retryable (transient) or permanent.
+ *
+ * Retryable: timeouts, 5xx server errors, 429 rate limits, generic/unknown errors.
+ * Non-retryable: validation errors, config errors, output truncation, JSON parse errors, 4xx client errors.
+ */
+export function isRetryableError(error: unknown): boolean {
+  // Non-retryable error types — these won't resolve on retry
+  if (error instanceof LlmConfigurationError) return false;
+  if (error instanceof LlmValidationError) return false;
+  if (error instanceof LlmOutputTruncatedError) return false;
+  if (error instanceof LlmJsonParseError) return false;
+
+  // API errors: retry on 5xx and 429, not on other 4xx
+  if (error instanceof LlmApiError) {
+    if (!error.statusCode) return true;
+    if (error.statusCode === 429) return true;
+    if (error.statusCode >= 500) return true;
+    return false;
+  }
+
+  // Timeouts are retryable
+  if (error instanceof LlmTimeoutError) return true;
+
+  // Generic LlmError (e.g. transient "An error occurred while processing the request")
+  // and unknown errors — assume retryable
+  return true;
 }
