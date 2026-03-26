@@ -8,6 +8,7 @@ import {
   generateRequestId,
   wrapSdkError,
   LlmOutputTruncatedError,
+  LlmJsonParseError,
   type LlmErrorContext,
 } from '../utils/errors';
 import { normalizeNullStrings } from '../utils/normalize-null-strings';
@@ -474,6 +475,7 @@ export class OpenRouterClient implements LlmClientInterface {
           (effectiveFormatGuidance ? `\n\n${effectiveFormatGuidance}` : '');
 
         let contentString: string;
+        let lastFinishReason: string | undefined;
 
         if (stream) {
           // Use streaming with structured output format
@@ -533,6 +535,7 @@ export class OpenRouterClient implements LlmClientInterface {
           }
 
           contentString = accumulatedText;
+          lastFinishReason = finishReason;
         } else {
           // Non-streaming path with structured outputs
           const response = await client.chat.send({
@@ -585,13 +588,36 @@ export class OpenRouterClient implements LlmClientInterface {
           }
 
           contentString = this.extractContentFromResponse(response);
+          lastFinishReason = typedResponse.choices?.[0]?.finish_reason;
         }
 
         // Parse and validate the response
         // OpenRouter should return valid JSON matching the schema
         this.logger.log('Parsing and validating structured response');
 
-        const parsed = JSON.parse(contentString);
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(contentString);
+        } catch (parseError) {
+          throw new LlmJsonParseError(
+            {
+              clientType: 'openrouter',
+              model: this.model,
+              elapsedMs: Date.now() - startTime,
+              timeoutMs: effectiveTimeout,
+              operation: 'createStructuredResponse',
+              requestId,
+              metadata: {
+                promptSize: prompt.length,
+                contentLength: contentString.length,
+                contentPreview: contentString.slice(-200),
+                finishReason: lastFinishReason,
+              },
+            },
+            contentString,
+            parseError as SyntaxError,
+          );
+        }
 
         // Gemini models return the literal string "null" for nullable fields.
         // Normalize before Zod validation to prevent silent data corruption.
@@ -635,6 +661,15 @@ export class OpenRouterClient implements LlmClientInterface {
           error: wrappedError.message,
           elapsedMs,
         });
+
+        if (error instanceof LlmJsonParseError) {
+          this.logger.logError(
+            'createStructuredResponse: model returned invalid JSON — not retrying (likely silent truncation)',
+            wrappedError,
+            wrappedError.context,
+          );
+          throw error;
+        }
 
         if (attempts === maxAttempts) {
           this.logger.logError(
