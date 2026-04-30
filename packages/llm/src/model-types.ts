@@ -2,9 +2,21 @@ import type { ChatModel as OpenAIChatModel } from 'openai/resources/shared';
 import type { Model as AnthropicModelType } from '@anthropic-ai/sdk/resources/messages/messages';
 
 /**
- * OpenAI model types from the official SDK
+ * OpenAI models released after the SDK's ChatModel union was last cut.
+ * Keep here until `openai` ships an SDK that includes them in `ChatModel`,
+ * then drop these literals.
  */
-export type OpenAIModel = OpenAIChatModel | 'text-embedding-3-large' | 'text-embedding-ada-002';
+type OpenAINewerModel = 'gpt-5.5' | 'gpt-5.5-pro';
+
+/**
+ * OpenAI model types from the official SDK, plus newer models not yet in the
+ * SDK's `ChatModel` union and the embedding models we use directly.
+ */
+export type OpenAIModel =
+  | OpenAIChatModel
+  | OpenAINewerModel
+  | 'text-embedding-3-large'
+  | 'text-embedding-ada-002';
 
 /**
  * Anthropic model types from the official SDK

@@ -50,9 +50,12 @@ const MODEL_MAP: Record<string, string> = {
   'gpt-5-nano-2025-08-07': 'openai/gpt-5-nano',
   'gpt-5-mini-2025-08-07': 'openai/gpt-5-mini',
   'gpt-5.4': 'openai/gpt-5.4',
+  'gpt-5.5': 'openai/gpt-5.5',
+  'gpt-5.5-pro': 'openai/gpt-5.5-pro',
   'gpt-5.2-2025-12-11': 'openai/gpt-5.2',
   'gpt-4o-mini': 'openai/gpt-4o-mini',
   // Anthropic
+  'claude-opus-4-7': 'anthropic/claude-opus-4.7',
   'claude-opus-4-6': 'anthropic/claude-opus-4.6',
   'claude-sonnet-4-6': 'anthropic/claude-sonnet-4.6',
   'claude-sonnet-4-5-20250929': 'anthropic/claude-sonnet-4.5',
