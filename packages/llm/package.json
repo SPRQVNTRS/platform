@@ -26,9 +26,9 @@
     "sync-pricing": "tsx scripts/sync-pricing.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
-    "@openrouter/sdk": "^0.9.11",
-    "openai": "^6.27.0",
+    "@anthropic-ai/sdk": "^0.91.1",
+    "@openrouter/sdk": "^0.12.22",
+    "openai": "^6.35.0",
     "qs": "^6.12.1"
   },
   "peerDependencies": {

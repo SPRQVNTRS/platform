@@ -81,12 +81,17 @@ export interface OpenRouterClientConfig extends Omit<BaseLlmClientConfig, 'model
  *
  * Uses OpenRouter's native structured outputs feature for reliable JSON generation.
  */
+type OpenRouterRetryConfig =
+  | { strategy: 'none' }
+  | { strategy: 'backoff'; retryConnectionErrors?: boolean };
+
 export class OpenRouterClient implements LlmClientInterface {
   private client: OpenRouter;
   private apiKey: string;
   private model: string;
   private logger: DebugLogger;
   private timeout: number;
+  private retryConfig: OpenRouterRetryConfig;
   private _lastUsage: LlmTokenUsage | null = null;
 
   get lastUsage(): LlmTokenUsage | null {
@@ -104,13 +109,18 @@ export class OpenRouterClient implements LlmClientInterface {
     // OpenRouter acts as a proxy, so we use a more conservative default
     this.timeout = config.timeout ?? 120000;
     this.apiKey = config.apiKey;
+    // The OpenRouter SDK's default backoff retries can mask `timeoutMs` for
+    // small values and consume long deadlines. Honor maxRetries=0 by disabling
+    // retries entirely; otherwise let the SDK use its default backoff.
+    this.retryConfig =
+      config.maxRetries === 0
+        ? { strategy: 'none' }
+        : { strategy: 'backoff', retryConnectionErrors: true };
 
     this.client = new OpenRouter({
       apiKey: config.apiKey,
       timeoutMs: this.timeout,
-      // Note: OpenRouter SDK doesn't support maxRetries configuration
-      // Retry logic is handled by the SDK internally
-      // config.maxRetries is accepted for API compatibility but not used
+      retryConfig: this.retryConfig,
     });
     this.model = config.model || 'google/gemini-2.5-flash-lite-preview-09-2025';
     this.logger = new DebugLogger('OpenRouterClient', { enabled: config.debug });
@@ -206,11 +216,12 @@ export class OpenRouterClient implements LlmClientInterface {
       ? new OpenRouter({
           apiKey: this.apiKey,
           timeoutMs: effectiveTimeout,
+          retryConfig: this.retryConfig,
         })
       : this.client;
 
     const response = await client.chat.send({
-      chatGenerationParams: {
+      chatRequest: {
         model: this.model,
         messages: [
           { role: 'system', content: DEFAULT_SYSTEM_PROMPT },
@@ -296,11 +307,12 @@ export class OpenRouterClient implements LlmClientInterface {
         ? new OpenRouter({
             apiKey: this.apiKey,
             timeoutMs: effectiveTimeout,
+            retryConfig: this.retryConfig,
           })
         : this.client;
 
       const stream = await client.chat.send({
-        chatGenerationParams: {
+        chatRequest: {
           model: this.model,
           messages: [
             { role: 'system', content: systemPrompt },
@@ -439,6 +451,7 @@ export class OpenRouterClient implements LlmClientInterface {
       ? new OpenRouter({
           apiKey: this.apiKey,
           timeoutMs: effectiveTimeout,
+          retryConfig: this.retryConfig,
         })
       : this.client;
 
@@ -540,7 +553,7 @@ export class OpenRouterClient implements LlmClientInterface {
         } else {
           // Non-streaming path with structured outputs
           const response = await client.chat.send({
-            chatGenerationParams: {
+            chatRequest: {
               model: this.model,
               messages: [
                 { role: 'system', content: systemPrompt },
