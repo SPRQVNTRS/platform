@@ -29,7 +29,7 @@ export interface CreateLoggerOptions {
   level?: LogLevel;
   /** Service version (defaults to npm_package_version env var) */
   version?: string;
-  /** Enable pretty printing (auto-detects from NODE_ENV if not set) */
+  /** Enable pretty printing — requires `pino-pretty` to be installed by the consumer (default: false) */
   pretty?: boolean;
   /** Additional paths to redact from logs */
   redactPaths?: string[];

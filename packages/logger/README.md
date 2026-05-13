@@ -37,7 +37,7 @@ requestLogger.info('Processing request'); // includes requestId and userId
 - Worker/job logging presets
 - Mock logger and spy utilities for testing
 - Automatic redaction of sensitive fields (passwords, tokens, etc.)
-- Pretty printing in development mode
+- Opt-in pretty printing via `pino-pretty` (consumer-installed)
 
 ## Entry Points
 
@@ -59,7 +59,7 @@ interface CreateLoggerOptions {
   serviceName: string;           // Required: included in all logs
   level?: LogLevel;              // 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
   version?: string;              // Service version (defaults to npm_package_version)
-  pretty?: boolean;              // Pretty print (auto-detects from NODE_ENV)
+  pretty?: boolean;              // Pretty print (default: false, requires pino-pretty installed)
   redactPaths?: string[];        // Additional paths to redact
   base?: Record<string, unknown>; // Additional base fields
   timestamp?: boolean;           // Include timestamp (default: true)
@@ -251,7 +251,24 @@ expect(getCalls('info')).toContainEqual({
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `LOG_LEVEL` | Log level | `info` |
-| `NODE_ENV` | Environment (enables pretty printing in `development`) | - |
+| `NODE_ENV` | Included as `env` in log base fields | - |
+
+## Pretty Printing (Development)
+
+Pretty output is **opt-in**. To enable it, install `pino-pretty` as a dev dependency in your application and pass `pretty: true`:
+
+```bash
+pnpm add -D pino-pretty
+```
+
+```typescript
+const logger = createLogger({
+  serviceName: 'my-service',
+  pretty: process.env.NODE_ENV !== 'production', // your choice when to enable
+});
+```
+
+Without `pretty: true`, the logger emits structured JSON regardless of `NODE_ENV` — which is what production log aggregators (Datadog, CloudWatch, Loki) expect. If you pass `pretty: true` without `pino-pretty` installed, Pino will throw at instantiation.
 
 ## Automatic Redaction
 

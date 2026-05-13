@@ -23,13 +23,6 @@ const DEFAULT_REDACT_PATHS = [
 ];
 
 /**
- * Determines if we're in development mode
- */
-function isDevelopment(): boolean {
-  return process.env['NODE_ENV'] === 'development';
-}
-
-/**
  * Gets the log level from options or environment
  */
 function getLogLevel(options: CreateLoggerOptions): string {
@@ -55,7 +48,7 @@ function createPrettyTransport(): pino.TransportSingleOptions {
  * Creates a Pino logger configuration from options
  */
 export function createPinoConfig(options: CreateLoggerOptions): pino.LoggerOptions {
-  const shouldPrettyPrint = options.pretty ?? isDevelopment();
+  const shouldPrettyPrint = options.pretty ?? false;
   const logLevel = getLogLevel(options);
   const redactPaths = [...DEFAULT_REDACT_PATHS, ...(options.redactPaths ?? [])];
 
