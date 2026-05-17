@@ -47,3 +47,7 @@ export {
   formatContentToStructure,
   generateAndFormatWithLanguageCheck,
 } from './src/helpers';
+
+// Response normalization utilities
+export { stripJsonArtifacts } from './src/utils/strip-json-artifacts';
+export type { SanitizationResult } from './src/utils/strip-json-artifacts';

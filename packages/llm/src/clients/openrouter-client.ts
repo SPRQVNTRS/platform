@@ -14,6 +14,7 @@ import {
 } from '../utils/errors';
 import { normalizeNullStrings } from '../utils/normalize-null-strings';
 import { resolveRefs } from '../utils/resolve-refs';
+import { stripJsonArtifacts } from '../utils/strip-json-artifacts';
 
 /**
  * Post-processes a JSON Schema to enforce strict mode for OpenAI/OpenRouter structured outputs.
@@ -191,11 +192,23 @@ export class OpenRouterClient implements LlmClientInterface {
    * @param prompt The prompt to send to the model
    * @param options Optional configuration
    * @param options.timeout Request timeout in milliseconds (overrides client default)
-   * @returns The text content as a string
+   * @param options.skipArtifactStripping Set to true to skip LLM output artifact sanitization (default: false)
+   * @returns The text content as a string, sanitized by `stripJsonArtifacts` unless opted out
    */
-  async createResponse(prompt: string, options?: { timeout?: number }): Promise<string> {
+  async createResponse(
+    prompt: string,
+    options?: { timeout?: number; skipArtifactStripping?: boolean },
+  ): Promise<string> {
     const response = await this.createRawResponse(prompt, options);
-    return this.extractContentFromResponse(response);
+    const content = this.extractContentFromResponse(response);
+    if (options?.skipArtifactStripping) {
+      return content;
+    }
+    const result = stripJsonArtifacts(content);
+    if (result.wasModified) {
+      this.logger.log('stripJsonArtifacts modified response', { removedPatterns: result.removedPatterns });
+    }
+    return result.sanitized;
   }
 
   /**

@@ -18,6 +18,7 @@
     "index.ts"
   ],
   "scripts": {
+    "test:unit": "vitest run",
     "test": "tsx tests/anthropic-client.test.ts && tsx tests/openrouter-client.test.ts && tsx tests/openai-client.test.ts",
     "test:anthropic": "tsx tests/anthropic-client.test.ts",
     "test:openrouter": "tsx tests/openrouter-client.test.ts",
@@ -40,7 +41,8 @@
     "@types/qs": "^6.9.15",
     "dotenv": "^17.2.3",
     "tsx": "^4.20.6",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.4"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
