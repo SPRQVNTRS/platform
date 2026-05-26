@@ -7,6 +7,9 @@ import { defineConfig } from 'vitest/config';
 // no describe/it blocks, so vitest treats them as failures).
 export default defineConfig({
   test: {
-    include: ['tests/strip-json-artifacts.test.ts'],
+    include: [
+      'tests/strip-json-artifacts.test.ts',
+      'tests/api-error-provider-message.test.ts',
+    ],
   },
 });
