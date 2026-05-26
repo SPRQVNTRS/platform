@@ -152,19 +152,161 @@ export class LlmValidationError extends LlmError {
 }
 
 /**
+ * Details extracted from a provider error response.
+ */
+export interface LlmApiErrorDetails {
+  /** Human-readable reason from the provider (e.g. "Key limit exceeded (monthly limit)") */
+  providerMessage?: string;
+  /** Numeric or string error code from the provider */
+  providerCode?: string | number;
+  /** Raw response body as received (string or object) */
+  body?: unknown;
+}
+
+/**
  * Error thrown when the API returns an error
  */
 export class LlmApiError extends LlmError {
   public readonly statusCode?: number;
+  public readonly providerMessage?: string;
+  public readonly providerCode?: string | number;
+  public readonly body?: unknown;
 
-  constructor(context: LlmErrorContext, statusCode?: number, originalError?: Error) {
-    const message = statusCode
-      ? `API error (status ${statusCode})`
-      : 'API error';
+  constructor(
+    context: LlmErrorContext,
+    statusCode?: number,
+    originalError?: Error,
+    details?: LlmApiErrorDetails,
+  ) {
+    const base = statusCode ? `API error (status ${statusCode})` : 'API error';
+    const message =
+      details?.providerMessage ? `${base}: ${details.providerMessage}` : base;
     super(message, context, originalError);
     this.name = 'LlmApiError';
     this.statusCode = statusCode;
+    this.providerMessage = details?.providerMessage;
+    this.providerCode = details?.providerCode;
+    this.body = details?.body;
   }
+}
+
+/**
+ * Reads the `data` payload from an axios-style `error.response`, if present.
+ */
+function extractResponseData(response: unknown): unknown {
+  if (response === null || typeof response !== 'object') {
+    return undefined;
+  }
+  return (response as Record<string, unknown>)['data'];
+}
+
+/**
+ * Extracts provider-specific error details from an unknown SDK error object.
+ *
+ * Priority order for providerMessage:
+ *  1. error.error?.message         — OpenRouter typed subclass / OpenAI-ish
+ *  2. parsed error.body            — OpenRouter base class (body is a JSON string)
+ *  3. error.body?.error?.message   — body already an object
+ *  4. error.response?.data?.error?.message — axios-style
+ *
+ * Returns {} for non-object / null inputs.
+ */
+export function extractProviderError(error: unknown): LlmApiErrorDetails {
+  if (error === null || typeof error !== 'object') {
+    return {};
+  }
+
+  const err = error as Record<string, unknown>;
+
+  // --- providerMessage resolution (priority order) ---
+
+  // 1. error.error?.message (OpenRouter typed subclass)
+  const errorField = err['error'];
+  if (
+    errorField !== null &&
+    typeof errorField === 'object' &&
+    typeof (errorField as Record<string, unknown>)['message'] === 'string'
+  ) {
+    const code = (errorField as Record<string, unknown>)['code'];
+    return {
+      providerMessage: (errorField as Record<string, unknown>)['message'] as string,
+      providerCode: typeof code === 'string' || typeof code === 'number' ? code : undefined,
+      body: err['body'] ?? extractResponseData(err['response']),
+    };
+  }
+
+  // 2. Parse error.body if it is a JSON string
+  const rawBody = err['body'];
+  if (typeof rawBody === 'string') {
+    try {
+      const parsed = JSON.parse(rawBody) as unknown;
+      if (
+        parsed !== null &&
+        typeof parsed === 'object'
+      ) {
+        const parsedObj = parsed as Record<string, unknown>;
+        const parsedError = parsedObj['error'];
+        if (
+          parsedError !== null &&
+          typeof parsedError === 'object' &&
+          typeof (parsedError as Record<string, unknown>)['message'] === 'string'
+        ) {
+          const code = (parsedError as Record<string, unknown>)['code'];
+          return {
+            providerMessage: (parsedError as Record<string, unknown>)['message'] as string,
+            providerCode: typeof code === 'string' || typeof code === 'number' ? code : undefined,
+            body: rawBody,
+          };
+        }
+      }
+    } catch {
+      // JSON.parse failed — move on
+    }
+  }
+
+  // 3. error.body?.error?.message (body already an object)
+  if (
+    rawBody !== null &&
+    typeof rawBody === 'object'
+  ) {
+    const bodyObj = rawBody as Record<string, unknown>;
+    const bodyError = bodyObj['error'];
+    if (
+      bodyError !== null &&
+      typeof bodyError === 'object' &&
+      typeof (bodyError as Record<string, unknown>)['message'] === 'string'
+    ) {
+      const code = (bodyError as Record<string, unknown>)['code'];
+      return {
+        providerMessage: (bodyError as Record<string, unknown>)['message'] as string,
+        providerCode: typeof code === 'string' || typeof code === 'number' ? code : undefined,
+        body: rawBody,
+      };
+    }
+  }
+
+  // 4. error.response?.data?.error?.message (axios-style)
+  const response = err['response'];
+  if (response !== null && typeof response === 'object') {
+    const data = (response as Record<string, unknown>)['data'];
+    if (data !== null && typeof data === 'object') {
+      const dataError = (data as Record<string, unknown>)['error'];
+      if (
+        dataError !== null &&
+        typeof dataError === 'object' &&
+        typeof (dataError as Record<string, unknown>)['message'] === 'string'
+      ) {
+        const code = (dataError as Record<string, unknown>)['code'];
+        return {
+          providerMessage: (dataError as Record<string, unknown>)['message'] as string,
+          providerCode: typeof code === 'string' || typeof code === 'number' ? code : undefined,
+          body: data,
+        };
+      }
+    }
+  }
+
+  return {};
 }
 
 /**
@@ -285,7 +427,7 @@ export function wrapSdkError(
   // Detect API errors (check for status codes)
   const statusCode = (error as any)?.status || (error as any)?.statusCode;
   if (statusCode) {
-    return new LlmApiError(context, statusCode, originalError);
+    return new LlmApiError(context, statusCode, originalError, extractProviderError(error));
   }
 
   // Detect validation errors
