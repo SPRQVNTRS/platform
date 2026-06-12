@@ -326,9 +326,18 @@ export class LlmOutputTruncatedError extends LlmError {
 }
 
 /**
- * Error thrown when model returns invalid JSON despite finish_reason: 'stop'.
- * This typically indicates silent truncation where the model cut off mid-response
- * without signaling via finish_reason: 'length'.
+ * Error thrown when model returns invalid JSON.
+ *
+ * Whether to retry depends on the likely cause:
+ * - If `finish_reason` is `'stop'`, the provider claims the response completed
+ *   cleanly, so the JSON is complete-but-malformed — a model/prompt problem that
+ *   retrying will not fix.
+ * - If `finish_reason` is missing, `'unknown'`, or any non-`'stop'` value, the
+ *   response may have been truncated mid-stream (network cut, provider hiccup).
+ *   In that case, an empty/whitespace-only body or an "Unexpected end of JSON input"
+ *   parse error is a strong signal of transient truncation worth retrying.
+ *
+ * Use `isLikelyTruncation` to distinguish the two cases.
  */
 export class LlmJsonParseError extends LlmError {
   public readonly rawContent: string;
@@ -343,6 +352,31 @@ export class LlmJsonParseError extends LlmError {
     this.name = 'LlmJsonParseError';
     this.rawContent = rawContent;
     this.parseError = parseError;
+  }
+
+  /**
+   * Returns `true` when the parse failure looks like transient truncation rather
+   * than a genuinely malformed model response.
+   *
+   * Heuristic:
+   * - If `finish_reason === 'stop'`, the provider claims the response completed
+   *   normally. Retrying consistently malformed output wastes tokens and is
+   *   unlikely to help, so this returns `false`.
+   * - Otherwise (finish_reason missing, `'unknown'`, or any other non-`'stop'`
+   *   value), a truncated/empty response is transient (network cut, provider
+   *   hiccup) and worth one retry. Returns `true` if EITHER:
+   *   - the parse error message includes `'Unexpected end of JSON input'`
+   *     (abrupt-end failure), OR
+   *   - `rawContent.trim()` is empty (empty or whitespace-only response).
+   */
+  get isLikelyTruncation(): boolean {
+    if (this.context.metadata?.finishReason === 'stop') {
+      return false;
+    }
+
+    const isAbruptEnd = this.parseError.message.includes('Unexpected end of JSON input');
+    const isEmptyContent = this.rawContent.trim().length === 0;
+    return isAbruptEnd || isEmptyContent;
   }
 }
 
@@ -442,15 +476,20 @@ export function wrapSdkError(
 /**
  * Determines whether an error is retryable (transient) or permanent.
  *
- * Retryable: timeouts, 5xx server errors, 429 rate limits, generic/unknown errors.
- * Non-retryable: validation errors, config errors, output truncation, JSON parse errors, 4xx client errors.
+ * Retryable: timeouts, 5xx server errors, 429 rate limits, generic/unknown errors,
+ * and JSON parse errors that look like transient truncation (finish_reason missing/
+ * unknown and content is empty or fails with "Unexpected end of JSON input").
+ *
+ * Non-retryable: validation errors, config errors, output truncation, 4xx client
+ * errors, and JSON parse errors where finish_reason is 'stop' (complete-but-malformed
+ * output is a model/prompt problem that retrying will not fix).
  */
 export function isRetryableError(error: unknown): boolean {
   // Non-retryable error types — these won't resolve on retry
   if (error instanceof LlmConfigurationError) return false;
   if (error instanceof LlmValidationError) return false;
   if (error instanceof LlmOutputTruncatedError) return false;
-  if (error instanceof LlmJsonParseError) return false;
+  if (error instanceof LlmJsonParseError) return error.isLikelyTruncation;
 
   // API errors: retry on 5xx and 429, not on other 4xx
   if (error instanceof LlmApiError) {
