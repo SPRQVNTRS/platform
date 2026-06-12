@@ -10,6 +10,7 @@ export default defineConfig({
     include: [
       'tests/strip-json-artifacts.test.ts',
       'tests/api-error-provider-message.test.ts',
+      'tests/json-parse-error-retryable.test.ts',
     ],
   },
 });
