@@ -1,6 +1,6 @@
 {
   "name": "@sprqvntrs/bot-verify",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Verify search-engine crawlers (Googlebot et al.) against their published IP ranges + reverse-DNS, and detect spoofed bots. Framework-agnostic core plus a React Router 7 middleware adapter.",
   "type": "module",
   "main": "./index.ts",
