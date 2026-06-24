@@ -56,9 +56,34 @@ describe('detectClaimedCrawler', () => {
   });
 
   describe('GoogleOther', () => {
-    it('detects GoogleOther', () => {
+    it('detects GoogleOther standalone', () => {
       const ua = 'GoogleOther';
       expect(detectClaimedCrawler(ua)).toBe('GoogleOther');
+    });
+
+    it('detects GoogleOther inside parentheses — close-paren boundary (regression)', () => {
+      // The token is terminated by ')' — the old character-class regex missed this
+      const ua =
+        'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GoogleOther) Chrome/148.0 Safari/537.36';
+      expect(detectClaimedCrawler(ua)).toBe('GoogleOther');
+    });
+  });
+
+  describe('paren-terminated tokens (close-paren boundary fix)', () => {
+    it('detects Googlebot when token ends with ")"', () => {
+      // Simulates a UA string where the token is the last word before the closing paren
+      const ua = 'Mozilla/5.0 (compatible; Googlebot)';
+      expect(detectClaimedCrawler(ua)).toBe('Googlebot');
+    });
+
+    it('detects Googlebot-Image with slash suffix (regression guard)', () => {
+      const ua = 'Googlebot-Image/1.0';
+      expect(detectClaimedCrawler(ua)).toBe('Googlebot-Image');
+    });
+
+    it('detects Googlebot inside standard paren UA (regression guard)', () => {
+      const ua = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+      expect(detectClaimedCrawler(ua)).toBe('Googlebot');
     });
   });
 
@@ -86,6 +111,18 @@ describe('detectClaimedCrawler', () => {
 
     it('returns null for a UA that merely mentions google.com', () => {
       const ua = 'Mozilla/5.0 (compatible; MyCrawler/1.0; see http://www.google.com/)';
+      expect(detectClaimedCrawler(ua)).toBeNull();
+    });
+
+    it('returns null when token appears as substring of a longer word', () => {
+      // "notagooglebot-thing" contains "Googlebot" but embedded — must not match
+      const ua = 'SomeBrowser/1.0 (notagooglebot-thing)';
+      expect(detectClaimedCrawler(ua)).toBeNull();
+    });
+
+    it('returns null for normal Chrome UA (no Google crawler tokens)', () => {
+      const ua =
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
       expect(detectClaimedCrawler(ua)).toBeNull();
     });
   });

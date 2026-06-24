@@ -57,10 +57,11 @@ export function detectClaimedCrawler(userAgent: string): GoogleCrawlerToken | nu
   }
 
   for (const token of GOOGLE_CRAWLER_TOKENS) {
-    // Match the token at a word boundary: preceded by start-of-string,
-    // a space, or a slash; followed by end-of-string, a space, slash, or
-    // semicolon. This prevents partial matches inside longer words.
-    const pattern = new RegExp(`(?:^|[\\s/;,])${escapeRegExp(token)}(?:$|[\\s/;,(])`, 'i');
+    // Alphanumeric/hyphen lookarounds: the token must not be immediately
+    // preceded or followed by A-Z, a-z, 0-9, or hyphen. This handles
+    // close-parens, dots, slashes, end-of-string, etc. as valid boundaries
+    // while still preventing embedded matches inside longer identifiers.
+    const pattern = new RegExp(`(?<![A-Za-z0-9-])${escapeRegExp(token)}(?![A-Za-z0-9-])`, 'i');
     if (pattern.test(userAgent)) {
       return token;
     }
