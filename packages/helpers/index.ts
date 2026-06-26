@@ -29,3 +29,10 @@ export { slugifyDate, daysAgo } from './src/date';
 // =============================================================================
 
 export { measureExecutionTime } from './src/timing';
+
+// =============================================================================
+// Number Helpers
+// =============================================================================
+
+export { formatNumber, formatDecimal, formatInteger, formatSmart } from './src/number';
+export type { NumberFormatOptions } from './src/number';
