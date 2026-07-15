@@ -11,6 +11,8 @@ export default defineConfig({
       'tests/strip-json-artifacts.test.ts',
       'tests/api-error-provider-message.test.ts',
       'tests/json-parse-error-retryable.test.ts',
+      'tests/openrouter-error-wrapping.test.ts',
+      'tests/pricing.test.ts',
     ],
   },
 });

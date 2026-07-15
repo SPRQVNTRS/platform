@@ -6,7 +6,15 @@ import type { Model as AnthropicModelType } from '@anthropic-ai/sdk/resources/me
  * Keep here until `openai` ships an SDK that includes them in `ChatModel`,
  * then drop these literals.
  */
-type OpenAINewerModel = 'gpt-5.5' | 'gpt-5.5-pro';
+type OpenAINewerModel =
+  | 'gpt-5.5'
+  | 'gpt-5.5-pro'
+  | 'gpt-5.6-terra'
+  | 'gpt-5.6-terra-pro'
+  | 'gpt-5.6-luna'
+  | 'gpt-5.6-luna-pro'
+  | 'gpt-5.6-sol'
+  | 'gpt-5.6-sol-pro';
 
 /**
  * OpenAI model types from the official SDK, plus newer models not yet in the

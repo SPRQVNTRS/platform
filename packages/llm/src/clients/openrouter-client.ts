@@ -223,28 +223,49 @@ export class OpenRouterClient implements LlmClientInterface {
    */
   async createRawResponse(prompt: string, options?: { timeout?: number }): Promise<unknown> {
     const effectiveTimeout = options?.timeout ?? this.timeout;
+    const requestId = generateRequestId();
+    const startTime = Date.now();
 
-    // Create a client with the effective timeout if different from instance timeout
-    const client = effectiveTimeout !== this.timeout
-      ? new OpenRouter({
-          apiKey: this.apiKey,
-          timeoutMs: effectiveTimeout,
-          retryConfig: this.retryConfig,
-        })
-      : this.client;
+    try {
+      // Create a client with the effective timeout if different from instance timeout
+      const client = effectiveTimeout !== this.timeout
+        ? new OpenRouter({
+            apiKey: this.apiKey,
+            timeoutMs: effectiveTimeout,
+            retryConfig: this.retryConfig,
+          })
+        : this.client;
 
-    const response = await client.chat.send({
-      chatRequest: {
+      const response = await client.chat.send({
+        chatRequest: {
+          model: this.model,
+          messages: [
+            { role: 'system', content: DEFAULT_SYSTEM_PROMPT },
+            { role: 'user', content: prompt },
+          ],
+          stream: false,
+        },
+      });
+
+      return response;
+    } catch (error) {
+      const elapsedMs = Date.now() - startTime;
+      const context: LlmErrorContext = {
+        clientType: 'openrouter',
         model: this.model,
-        messages: [
-          { role: 'system', content: DEFAULT_SYSTEM_PROMPT },
-          { role: 'user', content: prompt },
-        ],
-        stream: false,
-      },
-    });
+        elapsedMs,
+        timeoutMs: effectiveTimeout,
+        operation: 'createRawResponse',
+        requestId,
+        metadata: {
+          promptSize: prompt.length,
+        },
+      };
 
-    return response;
+      const wrappedError = wrapSdkError(error, context);
+      this.logger.logError('createRawResponse failed', wrappedError, wrappedError.context);
+      throw wrappedError;
+    }
   }
 
   /**
