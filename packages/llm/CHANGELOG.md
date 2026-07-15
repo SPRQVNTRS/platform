@@ -1,5 +1,15 @@
 # @sprqvntrs/llm
 
+## 3.12.0
+
+### Minor Changes
+
+- 2cbbe59: feat(llm): add the gpt-5.6 family (terra/luna/sol plus their pro variants) to `OpenAINewerModel` and to pricing under both bare and `openai/`-prefixed keys, and refresh `pricing-data.json` from OpenRouter. gpt-5.4-mini pricing is regression-tested (fixes #20; #12)
+
+### Patch Changes
+
+- 2cbbe59: fix(llm): route non-streaming OpenRouter errors through wrapSdkError. `createRawResponse` (and `createResponse`, which delegates to it) now wrap SDK failures in enriched `LlmApiError`/`LlmError` subclasses carrying status code, provider message/code, and full error context instead of leaking the bare `Error: Provider returned error`. Transient provider errors (5xx/429) are correctly classified retryable by `isRetryableError` (fixes #19)
+
 ## 3.11.0
 
 ### Minor Changes
