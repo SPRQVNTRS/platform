@@ -1,6 +1,12 @@
 import { OpenRouter } from '@openrouter/sdk';
 import { z } from 'zod/v4';
-import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk, LlmTokenUsage } from '../types/client-interface';
+import type {
+  LlmClientInterface,
+  BaseLlmClientConfig,
+  StreamChunk,
+  LlmTokenUsage,
+  ReasoningEffortLevel,
+} from '../types/client-interface';
 import { DEFAULT_SYSTEM_PROMPT } from '../models';
 import { calculateUsageCost } from '../pricing';
 import { DebugLogger } from '../utils/debug';
@@ -298,20 +304,27 @@ export class OpenRouterClient implements LlmClientInterface {
     prompt: string,
     options?: { timeout?: number }
   ): AsyncIterable<StreamChunk> {
-    yield* this.createStreamingResponseInternal(prompt, undefined, options?.timeout);
+    yield* this.createStreamingResponseInternal({ prompt, timeout: options?.timeout });
   }
 
   /**
    * Internal streaming response method with support for structured outputs
    *
-   * @param prompt The prompt to send to the model
-   * @param responseFormat Optional structured output format configuration
-   * @param timeout Optional timeout in milliseconds
-   * @param systemPrompt Optional custom system prompt (defaults to DEFAULT_SYSTEM_PROMPT)
+   * @param options.prompt The prompt to send to the model
+   * @param options.responseFormat Optional structured output format configuration
+   * @param options.timeout Optional timeout in milliseconds
+   * @param options.systemPrompt Optional custom system prompt (defaults to DEFAULT_SYSTEM_PROMPT)
+   * @param options.reasoningEffort Optional reasoning effort; sent as `reasoning.effort` only when defined
    * @returns An async iterable of stream chunks
    */
-  private async *createStreamingResponseInternal(
-    prompt: string,
+  private async *createStreamingResponseInternal({
+    prompt,
+    responseFormat,
+    timeout,
+    systemPrompt = DEFAULT_SYSTEM_PROMPT,
+    reasoningEffort,
+  }: {
+    prompt: string;
     responseFormat?: {
       type: 'json_schema';
       jsonSchema: {
@@ -320,10 +333,11 @@ export class OpenRouterClient implements LlmClientInterface {
         strict?: boolean;
         description?: string;
       };
-    },
-    timeout?: number,
-    systemPrompt: string = DEFAULT_SYSTEM_PROMPT
-  ): AsyncIterable<StreamChunk> {
+    };
+    timeout?: number;
+    systemPrompt?: string;
+    reasoningEffort?: ReasoningEffortLevel;
+  }): AsyncIterable<StreamChunk> {
     const effectiveTimeout = timeout ?? this.timeout;
     const requestId = generateRequestId();
     const startTime = Date.now();
@@ -354,6 +368,7 @@ export class OpenRouterClient implements LlmClientInterface {
           ],
           stream: true,
           ...(responseFormat && { responseFormat }),
+          ...(reasoningEffort !== undefined && { reasoning: { effort: reasoningEffort } }),
         },
       });
 
@@ -434,7 +449,10 @@ export class OpenRouterClient implements LlmClientInterface {
    * @param options.prompt The prompt to send to the model
    * @param options.schema The Zod schema to validate the response against
    * @param options.formatGuidance Optional guidance for formatting the response
-   * @param options.reasoningEffort Normalized reasoning effort level ('low' | 'medium' | 'high') - not used by OpenRouter
+   * @param options.reasoningEffort Normalized reasoning effort level ('none' | 'low' | 'medium' | 'high').
+   *   Sent to OpenRouter as `reasoning.effort` only when explicitly provided; when omitted no
+   *   `reasoning` field is transmitted and the model/provider default applies. Pass 'none' to
+   *   turn a reasoning model's thinking off.
    * @param options.maxAttempts Maximum number of retry attempts (default: 1, no retries)
    * @param options.logExecutionTime Whether to log execution time warnings (default: false)
    * @param options.responseInstructions Additional instructions to append to the prompt (deprecated, use formatGuidance)
@@ -448,7 +466,7 @@ export class OpenRouterClient implements LlmClientInterface {
     prompt,
     schema,
     formatGuidance,
-    reasoningEffort = 'low',
+    reasoningEffort,
     maxAttempts = 3,
     logExecutionTime = false,
     responseInstructions,
@@ -458,7 +476,7 @@ export class OpenRouterClient implements LlmClientInterface {
     prompt: string;
     schema: T;
     formatGuidance?: string;
-    reasoningEffort?: 'low' | 'medium' | 'high';
+    reasoningEffort?: ReasoningEffortLevel;
     maxAttempts?: number;
     logExecutionTime?: boolean;
     responseInstructions?: string;
@@ -532,7 +550,13 @@ export class OpenRouterClient implements LlmClientInterface {
           let lastLoggedLength = 0;
           let finishReason: string | undefined;
 
-          for await (const chunk of this.createStreamingResponseInternal(prompt, responseFormat, effectiveTimeout, systemPrompt)) {
+          for await (const chunk of this.createStreamingResponseInternal({
+            prompt,
+            responseFormat,
+            timeout: effectiveTimeout,
+            systemPrompt,
+            reasoningEffort,
+          })) {
             if (!chunk.isComplete) {
               accumulatedText += chunk.text;
 
@@ -595,6 +619,7 @@ export class OpenRouterClient implements LlmClientInterface {
               ],
               stream: false,
               responseFormat,
+              ...(reasoningEffort !== undefined && { reasoning: { effort: reasoningEffort } }),
             },
           });
 

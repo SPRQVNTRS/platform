@@ -1,7 +1,13 @@
 import { OpenAI } from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import { z } from 'zod/v4';
-import type { LlmClientInterface, BaseLlmClientConfig, StreamChunk, LlmTokenUsage } from '../types/client-interface';
+import type {
+  LlmClientInterface,
+  BaseLlmClientConfig,
+  StreamChunk,
+  LlmTokenUsage,
+  ReasoningEffortLevel,
+} from '../types/client-interface';
 import { DEFAULT_MODELS, WEB_SEARCH_TOOLS, DEFAULT_SYSTEM_PROMPT } from '../models';
 import { calculateUsageCost } from '../pricing';
 import { DebugLogger } from '../utils/debug';
@@ -257,7 +263,8 @@ export class OpenAIClient implements LlmClientInterface {
    * @param options.prompt The prompt to send to the model
    * @param options.schema The Zod schema to validate the response against
    * @param options.formatGuidance Optional guidance for formatting the response
-   * @param options.reasoningEffort Normalized reasoning effort level ('low' | 'medium' | 'high')
+   * @param options.reasoningEffort Normalized reasoning effort level ('none' | 'low' | 'medium' | 'high').
+   *   Sent as `reasoning.effort` only when provided; pass 'none' to turn reasoning off.
    * @param options.maxAttempts Maximum number of retry attempts (default: 1, no retries)
    * @param options.logExecutionTime Whether to log execution time warnings (default: false)
    * @param options.responseInstructions Additional instructions to append to the prompt (deprecated, use formatGuidance)
@@ -282,7 +289,7 @@ export class OpenAIClient implements LlmClientInterface {
     prompt: string;
     schema: T;
     formatGuidance?: string;
-    reasoningEffort?: 'low' | 'medium' | 'high';
+    reasoningEffort?: ReasoningEffortLevel;
     maxAttempts?: number;
     logExecutionTime?: boolean;
     responseInstructions?: string;

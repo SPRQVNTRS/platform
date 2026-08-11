@@ -1,6 +1,16 @@
 import { z } from 'zod/v4';
 
 /**
+ * Normalized reasoning effort levels shared across providers.
+ *
+ * `'none'` means "turn reasoning off" — providers that support it receive an
+ * explicit off signal; providers whose reasoning is opt-in simply stay off.
+ * Leaving the value `undefined` means "don't send any reasoning preference"
+ * and preserves each provider's own default behaviour.
+ */
+export type ReasoningEffortLevel = 'none' | 'low' | 'medium' | 'high';
+
+/**
  * Base configuration for all LLM clients
  */
 export interface BaseLlmClientConfig {
@@ -178,7 +188,8 @@ export interface LlmClientInterface {
    * @param options.prompt The prompt to send to the model
    * @param options.schema The Zod schema to validate the response against
    * @param options.formatGuidance Optional guidance for formatting the response
-   * @param options.reasoningEffort Normalized reasoning effort level ('low' | 'medium' | 'high')
+   * @param options.reasoningEffort Normalized reasoning effort level ('none' | 'low' | 'medium' | 'high').
+   *   Omit to leave the provider default untouched; pass 'none' to turn reasoning off.
    * @param options.maxAttempts Maximum number of retry attempts (default: 3)
    * @param options.logExecutionTime Whether to log execution time warnings (default: false)
    * @param options.responseInstructions Additional instructions to append to the prompt (deprecated, use formatGuidance)
@@ -190,7 +201,7 @@ export interface LlmClientInterface {
     prompt: string;
     schema: T;
     formatGuidance?: string;
-    reasoningEffort?: 'low' | 'medium' | 'high';
+    reasoningEffort?: ReasoningEffortLevel;
     maxAttempts?: number;
     logExecutionTime?: boolean;
     responseInstructions?: string;

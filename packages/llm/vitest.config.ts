@@ -12,6 +12,7 @@ export default defineConfig({
       'tests/api-error-provider-message.test.ts',
       'tests/json-parse-error-retryable.test.ts',
       'tests/openrouter-error-wrapping.test.ts',
+      'tests/openrouter-reasoning-effort.test.ts',
       'tests/pricing.test.ts',
     ],
   },
