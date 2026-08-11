@@ -41,10 +41,15 @@ export const DEFAULT_MODELS = {
 
 /**
  * Maps reasoning effort levels to provider-specific parameters
- * Note: Only OpenAI supports reasoning_effort currently (for o1 models)
+ *
+ * Note: this map is legacy — it is exported for backwards compatibility but is not
+ * consumed by any client. Clients pass the normalized `ReasoningEffortLevel` straight
+ * through to the provider (OpenAI and OpenRouter both accept `reasoning.effort`,
+ * including 'none'; Anthropic translates it into an extended-thinking budget).
  */
 export const REASONING_EFFORT_MAP = {
   openai: {
+    none: 'none' as const,
     low: undefined, // OpenAI doesn't use reasoning_effort for low
     medium: 'medium' as const,
     high: 'high' as const,
