@@ -81,3 +81,13 @@ This package detects and (optionally) returns 403 in-app. For durable firewall-l
 ```sh
 pnpm --filter @sprqvntrs/bot-verify test
 ```
+
+## Raw TypeScript
+
+This package ships raw TypeScript (`main` and `types` point at `index.ts`), so a Vite
+consumer (Vite, React Router, Remix) must add the scope to `ssr.noExternal`:
+`ssr: { noExternal: [/^@sprqvntrs\//] }`.
+
+## License
+
+MIT

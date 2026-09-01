@@ -7,7 +7,7 @@
   "exports": {
     ".": "./index.ts"
   },
-  "license": "proprietary",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/SPRQVNTRS/platform.git",
@@ -15,16 +15,18 @@
   },
   "files": [
     "src/**/*",
-    "index.ts"
+    "index.ts",
+    "LICENSE"
   ],
   "scripts": {
     "test:unit": "vitest run",
-    "test": "tsx tests/anthropic-client.test.ts && tsx tests/openrouter-client.test.ts && tsx tests/openai-client.test.ts",
+    "test": "vitest run",
     "test:anthropic": "tsx tests/anthropic-client.test.ts",
     "test:openrouter": "tsx tests/openrouter-client.test.ts",
     "test:openai": "tsx tests/openai-client.test.ts",
     "test:truncation": "tsx tests/output-truncated-error.test.ts",
-    "sync-pricing": "tsx scripts/sync-pricing.ts"
+    "sync-pricing": "tsx scripts/sync-pricing.ts",
+    "test:live": "tsx tests/anthropic-client.test.ts && tsx tests/openrouter-client.test.ts && tsx tests/openai-client.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
@@ -45,6 +47,10 @@
     "vitest": "^3.2.4"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
+  },
+  "homepage": "https://github.com/SPRQVNTRS/platform/tree/main/packages/llm#readme",
+  "bugs": {
+    "url": "https://github.com/SPRQVNTRS/platform/issues"
   }
 }

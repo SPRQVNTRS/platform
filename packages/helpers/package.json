@@ -8,7 +8,7 @@
   "exports": {
     ".": "./index.ts"
   },
-  "license": "proprietary",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/SPRQVNTRS/platform.git",
@@ -16,7 +16,8 @@
   },
   "files": [
     "src/**/*",
-    "index.ts"
+    "index.ts",
+    "LICENSE"
   ],
   "scripts": {
     "test": "vitest run",
@@ -29,6 +30,10 @@
     "vitest": "^3.2.4"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
+  },
+  "homepage": "https://github.com/SPRQVNTRS/platform/tree/main/packages/helpers#readme",
+  "bugs": {
+    "url": "https://github.com/SPRQVNTRS/platform/issues"
   }
 }
