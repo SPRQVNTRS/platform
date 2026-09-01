@@ -638,6 +638,12 @@ const gatherHandler: OperationHandler<GatherContext, GatherResult> = async (ctx)
 };
 ```
 
+## Raw TypeScript
+
+This package ships raw TypeScript (`main` and `types` point at `index.ts`), so a Vite
+consumer (Vite, React Router, Remix) must add the scope to `ssr.noExternal`:
+`ssr: { noExternal: [/^@sprqvntrs\//] }`.
+
 ## License
 
-Proprietary - SPRQVNTRS
+MIT

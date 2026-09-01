@@ -584,6 +584,12 @@ const result = await client.createStructuredResponse({
 
 See [LlmClientInterface](src/types/client-interface.ts) for complete interface documentation.
 
+## Raw TypeScript
+
+This package ships raw TypeScript (`main` and `types` point at `index.ts`), so a Vite
+consumer (Vite, React Router, Remix) must add the scope to `ssr.noExternal`:
+`ssr: { noExternal: [/^@sprqvntrs\//] }`.
+
 ## License
 
-Proprietary - See LICENSE file for details.
+MIT

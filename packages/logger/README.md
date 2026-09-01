@@ -299,3 +299,13 @@ This package exports TypeScript source files directly. Configure your bundler to
   }
 }
 ```
+
+## Raw TypeScript
+
+This package ships raw TypeScript (`main` and `types` point at `index.ts`), so a Vite
+consumer (Vite, React Router, Remix) must add the scope to `ssr.noExternal`:
+`ssr: { noExternal: [/^@sprqvntrs\//] }`.
+
+## License
+
+MIT

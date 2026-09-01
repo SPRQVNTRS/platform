@@ -11,6 +11,8 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 permissions:
   contents: write
   packages: write
+  # Trusted Publishing (OIDC) for npmjs.com — no stored npm token.
+  id-token: write
 
 jobs:
   release:
@@ -66,10 +68,43 @@ jobs:
             echo "::notice::No pending changesets"
           fi
 
-      - name: Publish packages
+      - name: Publish packages to GitHub Packages
         run: pnpm release
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # npm Trusted Publishing needs npm CLI >= 11.5.1 to exchange the run's
+      # OIDC token for a short-lived publish credential.
+      - name: Upgrade npm for Trusted Publishing
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          npm install -g npm@latest
+          npm --version
+
+      # Second registry, different auth model: NO NODE_AUTH_TOKEN here — the
+      # publish authenticates via OIDC. Both the runner .npmrc (written by
+      # setup-node's registry-url) and the repo .npmrc map @sprqvntrs to
+      # GitHub Packages, and a bare --registry does NOT beat a scoped mapping,
+      # so the scope is overridden explicitly on the command line.
+      - name: Publish packages to npmjs.com
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          NPMJS=https://registry.npmjs.org
+          for dir in packages/llm packages/workflows packages/helpers packages/logger packages/bot-verify; do
+            NAME=$(node -p "require('./$dir/package.json').name")
+            VERSION=$(node -p "require('./$dir/package.json').version")
+            if npm view "$NAME@$VERSION" version --registry "$NPMJS" >/dev/null 2>&1; then
+              echo "::notice::$NAME@$VERSION already on npmjs.com, skipping"
+              continue
+            fi
+            echo "::notice::Publishing $NAME@$VERSION to npmjs.com"
+            ( cd "$dir" && npm publish \
+                --provenance \
+                --access public \
+                --registry "$NPMJS" \
+                --@sprqvntrs:registry="$NPMJS" )
+          done
 
   docker-images:
     name: Build Docker Images

@@ -10,7 +10,7 @@
     "./server": "./src/presets/server.ts",
     "./testing": "./src/testing/mock-logger.ts"
   },
-  "license": "proprietary",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/SPRQVNTRS/platform.git",
@@ -18,10 +18,11 @@
   },
   "files": [
     "src/**/*",
-    "index.ts"
+    "index.ts",
+    "LICENSE"
   ],
   "scripts": {
-    "test": "tsx src/testing/mock-logger.test.ts",
+    "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -40,9 +41,14 @@
     "@types/node": "^22.0.0",
     "pino-pretty": "^13.0.0",
     "tsx": "^4.20.6",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.4"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
+  },
+  "homepage": "https://github.com/SPRQVNTRS/platform/tree/main/packages/logger#readme",
+  "bugs": {
+    "url": "https://github.com/SPRQVNTRS/platform/issues"
   }
 }
