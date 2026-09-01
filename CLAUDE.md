@@ -66,8 +66,8 @@ This repo uses [Changesets](https://github.com/changesets/changesets) for versio
 **Unit tests** use [Vitest](https://vitest.dev/). New packages should use vitest for unit tests.
 
 ```sh
-pnpm --filter @sprqvntrs/wp-rest test        # run unit tests for a package
-pnpm --filter @sprqvntrs/wp-rest test:watch  # run in watch mode
+pnpm --filter @sprqvntrs/bot-verify test        # run unit tests for a package
+pnpm --filter @sprqvntrs/bot-verify test:watch  # run in watch mode
 ```
 
 **E2E / integration tests** (`@sprqvntrs/llm`) are script-style files run with `tsx` that test against live upstream providers. These require API keys in `packages/<pkg>/.env`.
