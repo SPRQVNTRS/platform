@@ -1,5 +1,11 @@
 # @sprqvntrs/llm
 
+## 3.13.1
+
+### Patch Changes
+
+- 8a7a9e5: Relicensed to MIT and published to npmjs.com via trusted publishing; no code change.
+
 ## 3.13.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @sprqvntrs/bot-verify
 
+## 0.1.2
+
+### Patch Changes
+
+- 8a7a9e5: Relicensed to MIT and published to npmjs.com via trusted publishing; no code change.
+
 ## 0.1.1
 
 ### Patch Changes
