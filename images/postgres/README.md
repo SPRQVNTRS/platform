@@ -17,3 +17,7 @@ Installs:
 - Done automatically via GH Actions
 
 Thu Dec  4 02:55:22 PM CET 2025
+
+## Publishing
+
+The release workflow rebuilds and pushes this image only when the triggering commit changes a file under `images/postgres/`. Bump `version` in `package.json` and add a CHANGELOG entry in the same commit, so the pushed tag matches.
