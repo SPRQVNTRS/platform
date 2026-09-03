@@ -1,5 +1,11 @@
 # @sprqvntrs/image-postgres
 
+## 1.0.2
+
+### Patch Changes
+
+- Rebuild and push from the public platform repo so the container package links to this repo. No Dockerfile change.
+
 ## 1.0.1
 
 ### Patch Changes
