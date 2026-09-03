@@ -95,7 +95,7 @@ jobs:
           for dir in packages/llm packages/workflows packages/helpers packages/logger packages/bot-verify; do
             NAME=$(node -p "require('./$dir/package.json').name")
             VERSION=$(node -p "require('./$dir/package.json').version")
-            if npm view "$NAME@$VERSION" version --registry "$NPMJS" >/dev/null 2>&1; then
+            if npm view "$NAME@$VERSION" version --registry "$NPMJS" --@sprqvntrs:registry="$NPMJS" >/dev/null 2>&1; then
               echo "::notice::$NAME@$VERSION already on npmjs.com, skipping"
               continue
             fi
