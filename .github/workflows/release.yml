@@ -68,11 +68,11 @@ jobs:
             echo "::notice::No pending changesets"
           fi
 
-      # PACKAGES_TOKEN: operator PAT with write:packages; the packages are linked to the legacy repo so the job token cannot write them. Replace with a fine-grained PAT when convenient.
+      # Job token: each package grants this repo Write under "Manage Actions access" in its package settings.
       - name: Publish packages to GitHub Packages
         run: pnpm release
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # npm Trusted Publishing needs npm CLI >= 11.5.1 to exchange the run's
       # OIDC token for a short-lived publish credential.
@@ -136,14 +136,14 @@ jobs:
           VERSION=$(node -p "require('./images/postgres/package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      # PACKAGES_TOKEN: operator PAT with write:packages; the packages are linked to the legacy repo so the job token cannot write them. Replace with a fine-grained PAT when convenient.
+      # Job token: each package grants this repo Write under "Manage Actions access" in its package settings.
       - name: Log in to GitHub Container Registry
         if: steps.changes.outputs.postgres_changed == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.PACKAGES_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
         if: steps.changes.outputs.postgres_changed == 'true'
