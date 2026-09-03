@@ -1,5 +1,11 @@
 # @sprqvntrs/bot-verify
 
+## 0.1.3
+
+### Patch Changes
+
+- 001f159: Publish with the job-scoped GITHUB_TOKEN instead of an operator PAT. No code change.
+
 ## 0.1.2
 
 ### Patch Changes
