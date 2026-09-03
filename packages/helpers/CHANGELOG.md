@@ -1,5 +1,11 @@
 # @sprqvntrs/helpers
 
+## 0.2.2
+
+### Patch Changes
+
+- d378218: Republish from the public platform repo so the package links to this repo. No code change.
+
 ## 0.2.1
 
 ### Patch Changes
