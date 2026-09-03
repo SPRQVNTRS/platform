@@ -1,5 +1,11 @@
 # @sprqvntrs/llm
 
+## 3.13.2
+
+### Patch Changes
+
+- d378218: Republish from the public platform repo so the package links to this repo. No code change.
+
 ## 3.13.1
 
 ### Patch Changes
