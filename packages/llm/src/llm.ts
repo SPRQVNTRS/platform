@@ -24,6 +24,13 @@ export type LlmClientOptions = {
    * If provided, these clients will use OpenAI for reliable structured output formatting.
    */
   openaiApiKey?: string;
+  /**
+   * OpenRouter endpoint (OpenRouter only). Falls back to the `OPENROUTER_BASE_URL`
+   * environment variable, then `https://openrouter.ai/api/v1`. Must be an
+   * `openrouter.ai` host with the path `/api/v1`, for example the EU host
+   * `https://eu.openrouter.ai/api/v1`. Any other value throws.
+   */
+  baseUrl?: string;
 };
 
 /**
@@ -101,6 +108,7 @@ export class LLM {
       apiKey,
       model,
       openaiApiKey: options?.openaiApiKey,
+      baseUrl: options?.baseUrl,
       debug: options?.debug,
     });
   }

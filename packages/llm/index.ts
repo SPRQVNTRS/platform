@@ -49,5 +49,11 @@ export {
 } from './src/helpers';
 
 // Response normalization utilities
+export {
+  resolveOpenRouterBaseUrl,
+  DEFAULT_OPENROUTER_BASE_URL,
+  EU_OPENROUTER_BASE_URL,
+  OPENROUTER_BASE_URL_ENV,
+} from './src/utils/openrouter-base-url';
 export { stripJsonArtifacts } from './src/utils/strip-json-artifacts';
 export type { SanitizationResult } from './src/utils/strip-json-artifacts';

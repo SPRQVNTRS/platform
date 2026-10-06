@@ -19,6 +19,7 @@ import {
   type LlmErrorContext,
 } from '../utils/errors';
 import { normalizeNullStrings } from '../utils/normalize-null-strings';
+import { resolveOpenRouterBaseUrl } from '../utils/openrouter-base-url';
 import { resolveRefs } from '../utils/resolve-refs';
 import { stripJsonArtifacts } from '../utils/strip-json-artifacts';
 
@@ -76,6 +77,16 @@ export interface OpenRouterClientConfig extends Omit<BaseLlmClientConfig, 'model
    * This parameter is kept for backward compatibility but has no effect.
    */
   openaiApiKey?: string;
+
+  /**
+   * OpenRouter endpoint. Resolution order: this option, then the `OPENROUTER_BASE_URL`
+   * environment variable, then `https://openrouter.ai/api/v1`.
+   *
+   * Must be `https://openrouter.ai/api/v1` or `https://<sub>.openrouter.ai/api/v1`
+   * (for example the EU host `https://eu.openrouter.ai/api/v1`). Anything else throws.
+   * See `resolveOpenRouterBaseUrl`.
+   */
+  baseUrl?: string;
 }
 
 /**
@@ -101,6 +112,9 @@ export class OpenRouterClient implements LlmClientInterface {
   private retryConfig: OpenRouterRetryConfig;
   private _lastUsage: LlmTokenUsage | null = null;
 
+  /** The validated endpoint this client talks to, without a trailing slash. Read-only. */
+  readonly baseUrl: string;
+
   get lastUsage(): LlmTokenUsage | null {
     return this._lastUsage;
   }
@@ -109,9 +123,10 @@ export class OpenRouterClient implements LlmClientInterface {
    * Creates a new OpenRouterClient instance
    *
    * @param config Configuration options
-   * @throws Error if the API key is not configured
+   * @throws Error if the base URL is invalid (see `resolveOpenRouterBaseUrl`)
    */
   constructor(config: OpenRouterClientConfig) {
+    this.baseUrl = resolveOpenRouterBaseUrl(config.baseUrl);
     // Use config timeout or default to 120 seconds (2 minutes)
     // OpenRouter acts as a proxy, so we use a more conservative default
     this.timeout = config.timeout ?? 120000;
@@ -126,6 +141,7 @@ export class OpenRouterClient implements LlmClientInterface {
 
     this.client = new OpenRouter({
       apiKey: config.apiKey,
+      serverURL: this.baseUrl,
       timeoutMs: this.timeout,
       retryConfig: this.retryConfig,
     });

@@ -95,6 +95,7 @@ const client = LLM.getClient(provider, model, options?);
   debug?: boolean;                  // Enable debug logging
   useReasoningMode?: boolean;       // Enable reasoning endpoints (OpenAI only)
   openaiApiKey?: string;            // OpenAI key for Anthropic formatting
+  baseUrl?: string;                 // OpenRouter endpoint (OpenRouter only), see "OpenRouter endpoints"
 }
 ```
 
@@ -246,6 +247,66 @@ try {
   console.error('Configuration error:', error.message);
 }
 ```
+
+## OpenRouter endpoints
+
+The OpenRouter client can talk to two hosts:
+
+| Host | Base URL | Use |
+|------|----------|-----|
+| Global (default) | `https://openrouter.ai/api/v1` | All models |
+| EU in-region | `https://eu.openrouter.ai/api/v1` | OpenRouter Business. Fails closed and routes only to EU endpoints. |
+
+Pick the host with the `baseUrl` option or the `OPENROUTER_BASE_URL` environment variable.
+The order is: the `baseUrl` option, then `OPENROUTER_BASE_URL`, then the global default.
+
+```typescript
+import { LLM, OpenRouterClient, EU_OPENROUTER_BASE_URL } from '@sprqvntrs/llm';
+
+// Through the factory (or set OPENROUTER_BASE_URL=https://eu.openrouter.ai/api/v1)
+const client = LLM.getClient('openrouter', 'openai/gpt-4o-mini', {
+  baseUrl: EU_OPENROUTER_BASE_URL,
+});
+
+// Or directly. The resolved value is exposed read-only, for logging.
+const direct = new OpenRouterClient({ apiKey, model: 'openai/gpt-4o-mini', baseUrl: EU_OPENROUTER_BASE_URL });
+direct.baseUrl; // 'https://eu.openrouter.ai/api/v1'
+```
+
+The OpenAI and Anthropic clients ignore `baseUrl`.
+
+### Validation
+
+The value fails closed. The client throws at construction, and the message names the offending
+value (never the API key), when the value is not all of these:
+
+- a URL with the `https:` protocol
+- a host that is exactly `openrouter.ai` or ends with `.openrouter.ai`
+- free of credentials, a port, a query and a fragment
+- on the path `/api/v1` (one trailing slash is accepted and stripped)
+
+An empty string is also rejected. It never falls back to the global host.
+
+Apps can check their configuration at boot with the same validator:
+
+```typescript
+import { resolveOpenRouterBaseUrl } from '@sprqvntrs/llm';
+
+// Throws on a bad value. Returns the normalised URL otherwise.
+const baseUrl = resolveOpenRouterBaseUrl(config.openrouterBaseUrl); // falls back to process.env, then the default
+```
+
+Signature: `resolveOpenRouterBaseUrl(explicit?: string, env?: NodeJS.ProcessEnv): string`.
+
+### What changes on the EU host
+
+- **Fewer models.** The EU host lacks some models. For example there is no Gemini 3.7 or 3.8 Flash,
+  and no preview models. `openai/gpt-5.4-mini` has zero data retention (ZDR) endpoints only on Azure US.
+- **Price.** The EU host carries about a 10 percent surcharge.
+- **Missing model means HTTP 404.** A model with no endpoint on the chosen host fails with
+  HTTP 404 and the message "no endpoints available". Retrying never helps. Treat it as a
+  **configuration error** (wrong model for this host), not as a retryable error. Check the model
+  list for the host before you switch.
 
 ## Helper Functions
 
