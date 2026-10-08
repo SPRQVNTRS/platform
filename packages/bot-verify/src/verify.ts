@@ -26,6 +26,18 @@ export interface BotVerifierOptions {
    */
   rangeRefreshTtlMs?: number;
   /**
+   * How long to wait after a failed refresh attempt before starting the next
+   * background attempt, in milliseconds. Defaults to 15 minutes.
+   *
+   * Without this, a failing endpoint would be retried on every crawler request.
+   */
+  rangeRetryMs?: number;
+  /**
+   * Time budget for one range refresh attempt (all three fetches together),
+   * in milliseconds. Defaults to `10000`.
+   */
+  rangeFetchTimeoutMs?: number;
+  /**
    * Whether to perform a reverse-DNS lookup when the IP is not in the
    * published ranges. Defaults to `true`.
    *
@@ -71,7 +83,8 @@ export interface BotVerifier {
    */
   verify(input: VerifyInput): Promise<VerifyResult>;
   /**
-   * Manually triggers a refresh of the Google IP ranges.
+   * Manually triggers a refresh of the Google IP ranges. If a refresh is
+   * already running, joins it instead of starting another.
    * Returns `true` on success, `false` if the refresh failed (ranges unchanged).
    */
   refreshRanges(): Promise<boolean>;
@@ -82,10 +95,12 @@ export interface BotVerifier {
  *
  * The verifier seeds its IP range list from the bundled JSON files
  * immediately (so it is never empty) and refreshes lazily in the background
- * based on `rangeRefreshTtlMs`.
+ * based on `rangeRefreshTtlMs`. A refresh never delays a verification.
  */
 export function createBotVerifier(opts?: BotVerifierOptions): BotVerifier {
   const rangeRefreshTtlMs = opts?.rangeRefreshTtlMs ?? 24 * 60 * 60 * 1000;
+  const rangeRetryMs = opts?.rangeRetryMs ?? 15 * 60 * 1000;
+  const rangeFetchTimeoutMs = opts?.rangeFetchTimeoutMs ?? 10_000;
   const useRdns = opts?.rdns ?? true;
   const rdnsTimeoutMs = opts?.rdnsTimeoutMs ?? 1500;
   const fetchImpl = opts?.fetchImpl ?? fetch;
@@ -140,11 +155,14 @@ export function createBotVerifier(opts?: BotVerifierOptions): BotVerifier {
       };
     }
 
-    // Step 3: Lazy range refresh
-    const age = nowFn() - store.lastRefreshedAt;
-    if (age > rangeRefreshTtlMs) {
-      // Fire and forget — failures are swallowed inside RangeStore.refresh
-      await store.refresh(fetchImpl);
+    // Step 3: Lazy background range refresh. Started but NOT awaited, so the
+    // request never waits on Google. This request is checked against the
+    // current (possibly stale) list; rDNS is the fallback for a stale miss.
+    // The store is single-flight and rate-limits retries after a failure.
+    if (store.isRefreshDue(rangeRefreshTtlMs, rangeRetryMs)) {
+      store.refresh(fetchImpl, { timeoutMs: rangeFetchTimeoutMs }).catch(() => {
+        // refresh() never rejects today; this keeps it that way if it changes
+      });
     }
 
     // Step 4: IP-range check
@@ -204,6 +222,6 @@ export function createBotVerifier(opts?: BotVerifierOptions): BotVerifier {
 
   return {
     verify,
-    refreshRanges: () => store.refresh(fetchImpl),
+    refreshRanges: () => store.refresh(fetchImpl, { timeoutMs: rangeFetchTimeoutMs }),
   };
 }

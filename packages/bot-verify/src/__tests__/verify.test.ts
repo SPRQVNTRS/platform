@@ -256,4 +256,200 @@ describe('createBotVerifier', () => {
       expect(ok).toBe(true);
     });
   });
+
+  describe('background range refresh', () => {
+    const HOUR_MS = 60 * 60 * 1000;
+    const STALE_MS = 25 * HOUR_MS; // past the default 24 h TTL
+    const RETRY_MS = 15 * 60 * 1000;
+    const NEW_RANGE_IP = '192.0.2.10';
+
+    function createClock(): { now: () => number; advance: (ms: number) => void } {
+      let t = 1_000_000;
+      return {
+        now: () => t,
+        advance: (ms) => {
+          t += ms;
+        },
+      };
+    }
+
+    function okResponse(payload: unknown): Response {
+      return { ok: true, json: async () => payload } as unknown as Response;
+    }
+
+    function flush(): Promise<void> {
+      return new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    it('does not wait for a hanging refresh after the TTL', async () => {
+      const clock = createClock();
+      const fetchImpl = vi.fn(() => new Promise<Response>(() => {}));
+      const verifier = createBotVerifier({
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        now: clock.now,
+        rdns: false,
+      });
+      clock.advance(STALE_MS);
+
+      const outcome = await Promise.race([
+        verifier.verify({ userAgent: GOOGLEBOT_UA, ip: googlebotIpv4 }),
+        new Promise<'timed-out'>((resolve) => setTimeout(() => resolve('timed-out'), 1000)),
+      ]);
+
+      expect(outcome).not.toBe('timed-out');
+      expect(outcome).toMatchObject({ verdict: 'verified', method: 'ip-range' });
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+    });
+
+    it('starts exactly one refresh for 10 concurrent verifications', async () => {
+      const clock = createClock();
+      const fetchImpl = vi.fn(() => new Promise<Response>(() => {}));
+      const verifier = createBotVerifier({
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        now: clock.now,
+        rdns: false,
+      });
+      clock.advance(STALE_MS);
+
+      const results = await Promise.all(
+        Array.from({ length: 10 }, () =>
+          verifier.verify({ userAgent: GOOGLEBOT_UA, ip: googlebotIpv4 }),
+        ),
+      );
+
+      expect(results.every((r) => r.verdict === 'verified')).toBe(true);
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+    });
+
+    it.each([
+      ['fetch rejects', async () => { throw new Error('down'); }],
+      ['response is not ok', async () => ({ ok: false, json: async () => ({}) }) as unknown as Response],
+    ])('retries a failed refresh only after rangeRetryMs (%s)', async (_label, impl) => {
+      const clock = createClock();
+      const fetchImpl = vi.fn(impl);
+      const verifier = createBotVerifier({
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        now: clock.now,
+        rdns: false,
+      });
+      const input = { userAgent: GOOGLEBOT_UA, ip: googlebotIpv4 };
+      clock.advance(STALE_MS);
+
+      await verifier.verify(input);
+      await flush();
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+
+      // Still inside the retry window: no new fetch
+      clock.advance(RETRY_MS - 1000);
+      await verifier.verify(input);
+      await flush();
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+
+      // Past the retry window: exactly one more refresh
+      clock.advance(2000);
+      await Promise.all([verifier.verify(input), verifier.verify(input)]);
+      await flush();
+      expect(fetchImpl).toHaveBeenCalledTimes(6);
+    });
+
+    it('uses a custom rangeRetryMs', async () => {
+      const clock = createClock();
+      const fetchImpl = vi.fn(async () => { throw new Error('down'); });
+      const verifier = createBotVerifier({
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        now: clock.now,
+        rangeRetryMs: 1000,
+        rdns: false,
+      });
+      const input = { userAgent: GOOGLEBOT_UA, ip: googlebotIpv4 };
+      clock.advance(STALE_MS);
+
+      await verifier.verify(input);
+      await flush();
+      clock.advance(1001);
+      await verifier.verify(input);
+      await flush();
+
+      expect(fetchImpl).toHaveBeenCalledTimes(6);
+    });
+
+    it('replaces the list after a successful background refresh', async () => {
+      const clock = createClock();
+      const fetchImpl = vi.fn(async () =>
+        okResponse({ prefixes: [{ ipv4Prefix: '192.0.2.0/24' }] }),
+      );
+      const verifier = createBotVerifier({
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        now: clock.now,
+        initialRanges: [],
+        rdns: false,
+      });
+      const input = { userAgent: GOOGLEBOT_UA, ip: NEW_RANGE_IP };
+
+      const before = await verifier.verify(input);
+      expect(before.verdict).toBe('spoofed');
+
+      clock.advance(STALE_MS);
+      // verify() runs synchronously up to the refresh trigger (rDNS is off),
+      // so the background refresh is in flight when it returns its promise.
+      // It is judged on the old list.
+      const during = verifier.verify(input);
+      // refreshRanges() joins the in-flight attempt and resolves when it ends.
+      expect(await verifier.refreshRanges()).toBe(true);
+      expect((await during).verdict).toBe('spoofed');
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+
+      const after = await verifier.verify(input);
+      expect(after).toMatchObject({ verdict: 'verified', method: 'ip-range' });
+    });
+
+    it('passes an AbortSignal to fetchImpl', async () => {
+      const fetchImpl = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
+        okResponse({ prefixes: [{ ipv4Prefix: '192.0.2.0/24' }] }),
+      );
+      const verifier = createBotVerifier({
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        rdns: false,
+      });
+
+      await verifier.refreshRanges();
+
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+      for (const call of fetchImpl.mock.calls) {
+        expect(call[1]?.signal).toBeInstanceOf(AbortSignal);
+      }
+    });
+
+    it('refreshRanges() resolves false once rangeFetchTimeoutMs passes', async () => {
+      const fetchImpl = vi.fn(
+        (_url: string | URL | Request, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+          }),
+      );
+      const verifier = createBotVerifier({
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        rangeFetchTimeoutMs: 20,
+        rdns: false,
+      });
+
+      await expect(verifier.refreshRanges()).resolves.toBe(false);
+    });
+
+    it('keeps verifying against the old list after a failed refresh', async () => {
+      const clock = createClock();
+      const verifier = createBotVerifier({
+        fetchImpl: (async () => { throw new Error('down'); }) as unknown as typeof fetch,
+        now: clock.now,
+        rdns: false,
+      });
+      clock.advance(STALE_MS);
+
+      await verifier.verify({ userAgent: GOOGLEBOT_UA, ip: googlebotIpv4 });
+      await flush();
+      const result = await verifier.verify({ userAgent: GOOGLEBOT_UA, ip: googlebotIpv4 });
+
+      expect(result.verdict).toBe('verified');
+    });
+  });
 });

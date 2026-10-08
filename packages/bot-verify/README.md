@@ -19,7 +19,7 @@ Bots set `User-Agent: Googlebot` to bypass bot protection while originating from
 | `spoofed` | claims a crawler but IP is **not** Google's and rDNS does not confirm | block / log / ban |
 | `uncertain` | claims a crawler but client IP unknown, or rDNS inconclusive (DNS error) | **pass through** (never block) |
 
-Decision order: UA claim → valid client IP → IP in published ranges → reverse-DNS forward-confirm. Ranges are seeded from a bundled snapshot (so the store is never empty) and refreshed from Google daily; a failed refresh keeps the last-good list (fail-open).
+Decision order: UA claim → valid client IP → IP in published ranges → reverse-DNS forward-confirm. Ranges are seeded from a bundled snapshot (so the store is never empty) and refreshed from Google daily; a failed refresh keeps the last-good list (fail-open). The refresh runs in the background, never on the request path: a verification checks the current list and does not wait for Google. Refreshes are single-flight and time-boxed, and a failed one is retried at most once per `rangeRetryMs`.
 
 ## Core usage
 
@@ -29,6 +29,9 @@ import { createBotVerifier } from '@sprqvntrs/bot-verify';
 const verifier = createBotVerifier({
   rdns: true,            // reverse-DNS confirm on a range miss (default true)
   rdnsTimeoutMs: 1500,
+  rangeRefreshTtlMs: 24 * 60 * 60 * 1000, // refresh the ranges when older than this (default 24 h)
+  rangeRetryMs: 15 * 60 * 1000,           // wait after a failed refresh before retrying (default 15 min)
+  rangeFetchTimeoutMs: 10_000,            // time budget for one refresh attempt (default 10 s)
   logger: (r) => myLogger.debug('bot-verify', r),
 });
 
