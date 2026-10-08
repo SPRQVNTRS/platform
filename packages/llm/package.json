@@ -32,7 +32,7 @@
     "@anthropic-ai/sdk": "^0.91.1",
     "@openrouter/sdk": "^0.12.22",
     "openai": "^6.35.0",
-    "qs": "^6.12.1"
+    "qs": "^6.16.0"
   },
   "peerDependencies": {
     "zod": "^4.0.0"
