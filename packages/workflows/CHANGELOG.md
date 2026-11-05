@@ -1,5 +1,11 @@
 # @sprqvntrs/workflows
 
+## 0.2.7
+
+### Patch Changes
+
+- d9ff664: fix(workflows): accept drizzle-orm 0.45 as a peer, next to 0.39
+
 ## 0.2.6
 
 ### Patch Changes

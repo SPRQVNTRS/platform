@@ -1,6 +1,6 @@
 {
   "name": "@sprqvntrs/workflows",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "PostgreSQL-backed workflow orchestration with pg-boss job queuing",
   "type": "module",
   "main": "./index.ts",
