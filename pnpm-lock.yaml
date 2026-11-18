@@ -30,8 +30,8 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
       vite:
-        specifier: ^7.3.7
-        version: 7.3.7(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6)
+        specifier: ^7.3.8
+        version: 7.3.8(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6)
 
   images/postgres: {}
 
@@ -52,7 +52,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.12
-        version: 4.1.12(@types/node@22.18.10)(vite@7.3.7(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6))
+        version: 4.1.12(@types/node@22.18.10)(vite@7.3.8(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6))
 
   packages/helpers:
     devDependencies:
@@ -64,7 +64,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.12
-        version: 4.1.12(@types/node@22.18.10)(vite@7.3.7(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6))
+        version: 4.1.12(@types/node@22.18.10)(vite@7.3.8(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6))
 
   packages/llm:
     dependencies:
@@ -104,7 +104,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.12
-        version: 4.1.12(@types/node@22.18.10)(vite@7.3.7(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6))
+        version: 4.1.12(@types/node@22.18.10)(vite@7.3.8(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6))
 
   packages/logger:
     dependencies:
@@ -129,7 +129,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.12
-        version: 4.1.12(@types/node@22.18.10)(vite@7.3.7(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6))
+        version: 4.1.12(@types/node@22.18.10)(vite@7.3.8(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6))
 
   packages/workflows:
     dependencies:
@@ -157,7 +157,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.12
-        version: 4.1.12(@types/node@22.18.10)(vite@7.3.7(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6))
+        version: 4.1.12(@types/node@22.18.10)(vite@7.3.8(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6))
 
 packages:
 
@@ -1750,8 +1750,8 @@ packages:
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
-  vite@7.3.7:
-    resolution: {integrity: sha512-AHEzTORMbi7/7aXp7w7KZ5+DCUdSeLsJz0grY8xHpc9DHdYb0vQu6DqJfm2tOw3gDExNgPgnJTXxM6syYFHaCA==}
+  vite@7.3.8:
+    resolution: {integrity: sha512-3tTi78MAKhVk9h+YZVXMQ8POmneJuE97QUPAWtJghHzhH7BAyiqQOC2KZh1DWOsu/USB2cRXhznPByaabvYXfw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -2338,13 +2338,13 @@ snapshots:
       chai: 6.3.0
       tinyrainbow: 3.2.0
 
-  '@vitest/mocker@4.1.12(vite@7.3.7(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6))':
+  '@vitest/mocker@4.1.12(vite@7.3.8(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6))':
     dependencies:
       '@vitest/spy': 4.1.12
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 7.3.7(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6)
+      vite: 7.3.8(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6)
 
   '@vitest/pretty-format@4.1.12':
     dependencies:
@@ -3239,7 +3239,7 @@ snapshots:
 
   util-deprecate@1.0.2: {}
 
-  vite@7.3.7(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6):
+  vite@7.3.8(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6):
     dependencies:
       esbuild: 0.28.2
       fdir: 6.5.0(picomatch@4.0.7)
@@ -3253,10 +3253,10 @@ snapshots:
       jiti: 1.21.7
       tsx: 4.20.6
 
-  vitest@4.1.12(@types/node@22.18.10)(vite@7.3.7(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6)):
+  vitest@4.1.12(@types/node@22.18.10)(vite@7.3.8(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6)):
     dependencies:
       '@vitest/expect': 4.1.12
-      '@vitest/mocker': 4.1.12(vite@7.3.7(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6))
+      '@vitest/mocker': 4.1.12(vite@7.3.8(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6))
       '@vitest/pretty-format': 4.1.12
       '@vitest/runner': 4.1.12
       '@vitest/snapshot': 4.1.12
@@ -3273,7 +3273,7 @@ snapshots:
       tinyexec: 1.3.1
       tinyglobby: 0.2.16
       tinyrainbow: 3.2.0
-      vite: 7.3.7(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6)
+      vite: 7.3.8(@types/node@22.18.10)(jiti@1.21.7)(tsx@4.20.6)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 22.18.10
